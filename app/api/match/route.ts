@@ -1,9 +1,12 @@
+// app/api/match/route.ts
 import { NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabaseAdmin";
 
-type Mode = "ranked" | "zwanglos";
+type ModeIn = "ranked" | "zwanglos" | "casual";
+type ModeDb = "ranked" | "zwanglos";
 type Winner = "imposter" | "unschuldig";
-type WinMethod =
+
+type WinMethodDb =
   | "guessed_word"
   | "voted_out_innocent"
   | "voted_out_imposter"
@@ -11,42 +14,44 @@ type WinMethod =
   | "timeout"
   | "other";
 
-type ViolationType = "afk" | "unangemessen" | "left_voice";
-
 type PlayerIn = {
   discord_id: string;
   display_name?: string | null;
-  elo_before?: number | null; // empfohlen für ranked
+  elo_before?: number | null;
+  total_points?: number | null;
 };
 
-type RoundIn = {
-  round_no: number; // 1..5
+type RoundInBot = {
+  round_no?: number;
+  category?: string;
   category_slug?: string | null;
   category_name?: string | null;
   word?: string | null;
   imposter_discord_id: string;
   winner: Winner;
-  win_method: WinMethod;
+  win_method?: string;
   aborted?: boolean;
   aborted_reason?: string | null;
 };
 
-type ViolationIn = {
-  type: ViolationType;
-  discord_id: string; // Täter
-  round_no?: number | null;
-};
-
 type Payload = {
   guild_id: string;
-  mode: Mode;
+  mode: ModeIn;
   started_at?: string | null;
   ended_at?: string | null;
 
-  players: PlayerIn[]; // 4
-  rounds: RoundIn[]; // 5
+  players: PlayerIn[];
 
-  violation?: ViolationIn | null;
+  rounds?: RoundInBot[] | null;
+
+  ended_reason?: string | null;
+  abort_reason?: string | null;
+
+  violation?: {
+    type: "afk" | "unangemessen" | "left_voice";
+    discord_id: string;
+    round_no?: number | null;
+  } | null;
 };
 
 function j(data: any, status = 200) {
@@ -56,33 +61,79 @@ function nowIso() {
   return new Date().toISOString();
 }
 
-// Elo-Floor
 const ELO_FLOOR = 300;
-
-// Placement
-const PLACEMENT_GAMES = 6; // erste 6 ranked games
+const PLACEMENT_GAMES = 6;
 const PLACEMENT_MULT = 3;
-
-// Qualifikation
 const CASUAL_REQUIRED_FOR_RANKED = 5;
 
-// Lobby diff multiplier (cap)
+function readBotToken(req: Request) {
+  const auth = req.headers.get("authorization") || "";
+  const m = auth.match(/^Bearer\s+(.+)$/i);
+  if (m?.[1]) return m[1].trim();
+  const legacy = req.headers.get("x-bot-token");
+  if (legacy) return legacy.trim();
+  return "";
+}
+
+function normalizeMode(mode: ModeIn): ModeDb {
+  if (mode === "casual") return "zwanglos";
+  if (mode === "zwanglos") return "zwanglos";
+  return "ranked";
+}
+
+function mapWinMethod(raw?: string | null): WinMethodDb {
+  const s = String(raw ?? "").trim().toLowerCase();
+
+  if (s === "imposter_correct_guess" || s === "guessed_word") return "guessed_word";
+  if (s === "wrong_guess" || s === "imposter_wrong_guess" || s === "all_imposters_guessed_wrong") return "wrong_guess";
+
+  if (s === "voted_out_wrong" || s === "voted_out_innocent") return "voted_out_innocent";
+  if (s === "voted_out_imposter_no_guess" || s === "voted_out_imposter") return "voted_out_imposter";
+
+  if (s === "timeout") return "timeout";
+
+  if (s.includes("imposter") || s.includes("crew") || s.includes("out") || s.includes("left")) return "other";
+  return "other";
+}
+
+async function getOrCreateCategoryId(slugOrName?: string | null, name?: string | null) {
+  const raw = (slugOrName ?? name ?? "").trim();
+  if (!raw) return null;
+
+  const slug = raw
+    .toLowerCase()
+    .replace(/\s+/g, "-")
+    .replace(/[^a-z0-9\-]/g, "");
+
+  if (!slug) return null;
+
+  const { data: found, error: findErr } = await supabaseAdmin
+    .from("categories")
+    .select("id")
+    .eq("slug", slug)
+    .maybeSingle();
+  if (findErr) throw findErr;
+  if (found?.id) return found.id as number;
+
+  const { data: created, error: createErr } = await supabaseAdmin
+    .from("categories")
+    .insert([{ slug, name: (name ?? slugOrName ?? slug).trim() || slug }])
+    .select("id")
+    .single();
+  if (createErr) throw createErr;
+
+  return created.id as number;
+}
+
+/** Ranked Elo helpers */
 function clampPct(absDiff: number) {
   if (absDiff >= 300) return 0.6;
   if (absDiff >= 200) return 0.4;
   if (absDiff >= 100) return 0.2;
   return 0;
 }
-
-/**
- * Lobby multiplier (float):
- * diff = playerElo - avgOthers
- * diff > 0: weniger Gewinn, mehr Verlust
- * diff < 0: mehr Gewinn, weniger Verlust
- */
 function applyLobbyMultiplierFloat(baseDelta: number, playerElo: number, avgOthers: number) {
   if (baseDelta === 0) return 0;
-
   const diff = playerElo - avgOthers;
   const pct = clampPct(Math.abs(diff));
   if (pct === 0) return baseDelta;
@@ -97,12 +148,6 @@ function applyLobbyMultiplierFloat(baseDelta: number, playerElo: number, avgOthe
   }
   return scaled;
 }
-
-/**
- * Tie average as float (no early rounding)
- * Base deltas (zero-sum):
- * 1:+30, 2:+10, 3:-10, 4:-30
- */
 function computeBaseDeltasByTiesFloat(sortedByPoints: { discord_id: string; points: number }[]) {
   const baseByPlace = [30, 10, -10, -30];
   const result = new Map<string, number>();
@@ -123,11 +168,6 @@ function computeBaseDeltasByTiesFloat(sortedByPoints: { discord_id: string; poin
   }
   return result;
 }
-
-/**
- * zero-sum normalize + round (ensures sum == 0 exactly)
- * ONLY used when NO placement players are in the match.
- */
 function normalizeZeroSumAndRound(deltasFloat: Record<string, number>) {
   const ids = Object.keys(deltasFloat);
   const n = ids.length;
@@ -163,94 +203,59 @@ function normalizeZeroSumAndRound(deltasFloat: Record<string, number>) {
   return rounded;
 }
 
-function banMinutesForViolationCount(count: number) {
-  if (count === 1) return 30;
-  if (count === 2) return 60;
-  if (count === 3) return 120;
-  if (count === 4) return 360;
-  if (count === 5) return 720;
-  return 24 * 60;
-}
-function addMinutes(date: Date, minutes: number) {
-  return new Date(date.getTime() + minutes * 60_000);
-}
-
-/** category get/create */
-async function getOrCreateCategoryId(slugOrName?: string | null, name?: string | null) {
-  const raw = (slugOrName ?? name ?? "").trim();
-  if (!raw) return null;
-
-  const slug = raw
-    .toLowerCase()
-    .replace(/\s+/g, "-")
-    .replace(/[^a-z0-9\-]/g, "");
-
-  if (!slug) return null;
-
-  const { data: found, error: findErr } = await supabaseAdmin
-    .from("categories")
-    .select("id")
-    .eq("slug", slug)
-    .maybeSingle();
-  if (findErr) throw findErr;
-  if (found?.id) return found.id as number;
-
-  const { data: created, error: createErr } = await supabaseAdmin
-    .from("categories")
-    .insert([{ slug, name: (name ?? slugOrName ?? slug).trim() || slug }])
-    .select("id")
-    .single();
-  if (createErr) throw createErr;
-
-  return created.id as number;
-}
-
 export async function POST(req: Request) {
+  let body: Payload | null = null;
+
   try {
-    // --- Secret Auth ---
-    const token = req.headers.get("x-bot-token");
+    const token = readBotToken(req);
     if (!token || token !== process.env.BOT_INGEST_TOKEN) {
       return j({ ok: false, error: "unauthorized" }, 401);
     }
 
-    const body = (await req.json()) as Payload;
+    const rawBody = await req.text();
+    if (!rawBody) return j({ ok: false, error: "empty body" }, 400);
 
-    if (!body?.guild_id || !body?.mode || !Array.isArray(body.players) || !Array.isArray(body.rounds)) {
+    try {
+      body = JSON.parse(rawBody);
+    } catch {
+      return j({ ok: false, error: "invalid json" }, 400);
+    }
+
+    if (!body?.guild_id || !body?.mode || !Array.isArray(body.players)) {
       return j({ ok: false, error: "missing fields" }, 400);
     }
-
-    const mode: Mode = body.mode;
-    if (mode !== "ranked" && mode !== "zwanglos") {
-      return j({ ok: false, error: "mode must be ranked|zwanglos" }, 400);
+    if (body.players.length !== 4) {
+      return j({ ok: false, error: "expected 4 players", got: body.players.length }, 400);
     }
-    if (body.players.length !== 4) return j({ ok: false, error: "expected 4 players" }, 400);
-    if (body.rounds.length !== 5) return j({ ok: false, error: "expected 5 rounds" }, 400);
 
+    const modeDb = normalizeMode(body.mode);
     const guild_id = String(body.guild_id);
 
-    // --- Players upsert (name) ---
+    const ids = body.players.map((p) => String(p.discord_id));
+
+    // Upsert players (Name)
     const upsertPlayers = body.players.map((p) => ({
       discord_id: String(p.discord_id),
       last_name: p.display_name ?? null,
       updated_at: nowIso(),
     }));
-    const { error: upsertErr } = await supabaseAdmin.from("players").upsert(upsertPlayers, { onConflict: "discord_id" });
+    const { error: upsertErr } = await supabaseAdmin
+      .from("players")
+      .upsert(upsertPlayers, { onConflict: "discord_id" });
     if (upsertErr) throw upsertErr;
 
-    // --- Read current player stats (needed for: casual gate, placement flag, elo floor) ---
-    const ids = body.players.map((p) => String(p.discord_id));
-
+    // Read current stats
     const { data: playerRows, error: prErr } = await supabaseAdmin
       .from("players")
-      .select("discord_id, elo_ranked, games_casual, games_ranked, ranked_games_played, violations_count, banned_until")
+      .select("discord_id, elo_ranked, games_casual, games_ranked, ranked_games_played")
       .in("discord_id", ids);
     if (prErr) throw prErr;
 
     const byId: Record<string, any> = {};
     for (const r of playerRows ?? []) byId[String(r.discord_id)] = r;
 
-    // --- Ranked qualification gate: must have 5 casual games ---
-    if (mode === "ranked") {
+    // ranked gate: 5 casual
+    if (modeDb === "ranked") {
       for (const id of ids) {
         const gamesCasual = Number(byId[id]?.games_casual ?? 0);
         if (gamesCasual < CASUAL_REQUIRED_FOR_RANKED) {
@@ -267,175 +272,112 @@ export async function POST(req: Request) {
       }
     }
 
-    // --- Match erstellen ---
+    const rounds: RoundInBot[] = Array.isArray(body.rounds) ? body.rounds : [];
+    const hasRounds = rounds.length > 0;
+
+    // ✅ FIX 1: ended_at IMMER setzen (sonst "zwanglos" verschwindet oft im Frontend)
+    const startedAtIso = body.started_at ? new Date(body.started_at).toISOString() : nowIso();
+    const endedAtIso = body.ended_at ? new Date(body.ended_at).toISOString() : nowIso();
+
+    // ✅ FIX 2: aborted_reason NUR bei echten Abbrüchen/Violations setzen
+    const aborted_reason =
+      body.violation?.type ? `violation:${body.violation.type}` : (body.abort_reason ?? null);
+
+    // Create match
     const { data: match, error: matchErr } = await supabaseAdmin
       .from("matches")
       .insert([
         {
           guild_id,
-          mode,
-          started_at: body.started_at ? new Date(body.started_at).toISOString() : nowIso(),
-          ended_at: body.ended_at ? new Date(body.ended_at).toISOString() : null,
-          aborted_reason: body.violation ? `violation:${body.violation.type}` : null,
+          mode: modeDb,
+          started_at: startedAtIso,
+          ended_at: endedAtIso,
+          aborted_reason,
         },
       ])
       .select("id")
       .single();
     if (matchErr) throw matchErr;
+
     const match_id = match.id as number;
 
-    // --- Runden speichern ---
-    const roundInsert: any[] = [];
-    for (const r of body.rounds) {
-      const category_id = await getOrCreateCategoryId(r.category_slug ?? null, r.category_name ?? null);
-
-      roundInsert.push({
-        match_id,
-        round_no: r.round_no,
-        category_id,
-        word: r.word ?? null,
-        imposter_discord_id: String(r.imposter_discord_id),
-        winner: r.winner,
-        win_method: r.win_method,
-        aborted: Boolean(r.aborted),
-        aborted_reason: r.aborted_reason ?? null,
-      });
-    }
-
-    const { data: insertedRounds, error: roundErr } = await supabaseAdmin
-      .from("match_rounds")
-      .insert(roundInsert)
-      .select("id, round_no, imposter_discord_id, winner, aborted");
-    if (roundErr) throw roundErr;
-
-    // --- Punkte berechnen + round_player_points ---
+    // Compute points
     const points: Record<string, number> = {};
     for (const id of ids) points[id] = 0;
 
-    const rppRows: { round_id: number; discord_id: string; points: number }[] = [];
-    const roundWinsImposter: Record<string, number> = {};
-    const roundWinsUnschuldig: Record<string, number> = {};
+    if (hasRounds) {
+      const roundInsert: any[] = [];
 
-    for (const ir of insertedRounds ?? []) {
-      const round_id = ir.id as number;
-      const imp = String(ir.imposter_discord_id);
+      for (let idx = 0; idx < rounds.length; idx++) {
+        const r = rounds[idx];
 
-      if (ir.aborted) continue;
+        const round_no = Number(r.round_no ?? idx + 1);
+        const category_name = r.category_name ?? r.category ?? null;
+        const category_slug = r.category_slug ?? null;
 
-      if (ir.winner === "imposter") {
-        points[imp] += 2;
-        roundWinsImposter[imp] = (roundWinsImposter[imp] ?? 0) + 1;
+        const category_id = await getOrCreateCategoryId(category_slug, category_name);
+        const win_method_db = mapWinMethod(r.win_method ?? null);
 
-        for (const id of ids) {
-          rppRows.push({ round_id, discord_id: id, points: id === imp ? 2 : 0 });
-        }
-      } else {
-        for (const id of ids) {
-          if (id === imp) {
-            rppRows.push({ round_id, discord_id: id, points: 0 });
-          } else {
-            points[id] += 1;
-            roundWinsUnschuldig[id] = (roundWinsUnschuldig[id] ?? 0) + 1;
-            rppRows.push({ round_id, discord_id: id, points: 1 });
+        roundInsert.push({
+          match_id,
+          round_no,
+          category_id,
+          word: r.word ?? null,
+          imposter_discord_id: String(r.imposter_discord_id),
+          winner: r.winner,
+          win_method: win_method_db,
+          aborted: Boolean(r.aborted),
+          aborted_reason: r.aborted_reason ?? null,
+        });
+      }
+
+      const { data: insertedRounds, error: roundErr } = await supabaseAdmin
+        .from("match_rounds")
+        .insert(roundInsert)
+        .select("id, imposter_discord_id, winner, aborted");
+      if (roundErr) throw roundErr;
+
+      // round_player_points rows
+      const rppRows: { round_id: number; discord_id: string; points: number }[] = [];
+
+      for (const ir of insertedRounds ?? []) {
+        const round_id = ir.id as number;
+        const imp = String(ir.imposter_discord_id);
+        const aborted = Boolean(ir.aborted);
+
+        if (aborted) continue;
+
+        if (ir.winner === "imposter") {
+          points[imp] += 2;
+          for (const id of ids) rppRows.push({ round_id, discord_id: id, points: id === imp ? 2 : 0 });
+        } else {
+          for (const id of ids) {
+            if (id === imp) rppRows.push({ round_id, discord_id: id, points: 0 });
+            else {
+              points[id] += 1;
+              rppRows.push({ round_id, discord_id: id, points: 1 });
+            }
           }
         }
       }
+
+      if (rppRows.length) {
+        const { error: rppErr } = await supabaseAdmin.from("round_player_points").insert(rppRows);
+        if (rppErr) throw rppErr;
+      }
+    } else {
+      for (const p of body.players) {
+        const id = String(p.discord_id);
+        points[id] = Number(p.total_points ?? 0);
+      }
     }
 
-    const { error: rppErr } = await supabaseAdmin.from("round_player_points").insert(rppRows);
-    if (rppErr) throw rppErr;
-
-    // --- Regelverstoß (Abbruch + Bann + Ranked: Täter -30, Rest 0) ---
-    if (body.violation) {
-      const viol = body.violation;
-      const violator = String(viol.discord_id);
-
-      let viol_round_id: number | null = null;
-      if (viol.round_no) {
-        const found = (insertedRounds ?? []).find((r: any) => r.round_no === viol.round_no);
-        viol_round_id = found?.id ?? null;
-      }
-
-      const { error: vioErr } = await supabaseAdmin.from("player_violations").insert([
-        {
-          guild_id,
-          discord_id: violator,
-          violation_type: viol.type,
-          source: "system",
-          match_id,
-          round_id: viol_round_id,
-        },
-      ]);
-      if (vioErr) throw vioErr;
-
-      const oldCount = Number(byId[violator]?.violations_count ?? 0);
-      const newCount = oldCount + 1;
-
-      const minutes = banMinutesForViolationCount(newCount);
-      const now = new Date();
-      const newBanUntil = addMinutes(now, minutes);
-
-      const currentBan = byId[violator]?.banned_until ? new Date(byId[violator].banned_until) : null;
-      const finalBan = currentBan && currentBan > newBanUntil ? currentBan : newBanUntil;
-
-      const { error: updV } = await supabaseAdmin
-        .from("players")
-        .update({
-          violations_count: newCount,
-          banned_until: finalBan.toISOString(),
-          last_violation_at: nowIso(),
-        })
-        .eq("discord_id", violator);
-      if (updV) throw updV;
-
-      await supabaseAdmin.from("matches").update({ aborted_reason: `violation:${viol.type}` }).eq("id", match_id);
-
-      if (mode === "ranked") {
-        // abort results
-        const resultsAbort = ids.map((id) => ({
-          match_id,
-          discord_id: id,
-          total_points: points[id] ?? 0,
-          placement: 0,
-          elo_delta: id === violator ? -30 : 0,
-        }));
-        const { error: mrErr } = await supabaseAdmin.from("match_results").insert(resultsAbort);
-        if (mrErr) throw mrErr;
-
-        // Täter elo -30 (mit floor)
-        const currentElo = Number(byId[violator]?.elo_ranked ?? 1000);
-        const newElo = Math.max(ELO_FLOOR, currentElo - 30);
-
-        const { error: eloUpdErr } = await supabaseAdmin
-          .from("players")
-          .update({ elo_ranked: newElo, updated_at: nowIso() })
-          .eq("discord_id", violator);
-        if (eloUpdErr) throw eloUpdErr;
-
-        return j({ ok: true, match_id, aborted: true });
-      }
-
-      // zwanglos abort -> elo_delta 0
-      const resultsAbort = ids.map((id) => ({
-        match_id,
-        discord_id: id,
-        total_points: points[id] ?? 0,
-        placement: 0,
-        elo_delta: 0,
-      }));
-      const { error: mrErr } = await supabaseAdmin.from("match_results").insert(resultsAbort);
-      if (mrErr) throw mrErr;
-
-      return j({ ok: true, match_id, aborted: true });
-    }
-
-    // --- Normales Match Ende: Placements + Elo ---
     const sorted = Object.entries(points)
       .map(([discord_id, pts]) => ({ discord_id, points: pts }))
       .sort((a, b) => b.points - a.points);
 
-    // --- Save results for zwanglos (no Elo) ---
-    if (mode === "zwanglos") {
+    // --- zwanglos ---
+    if (modeDb === "zwanglos") {
       const resultsRows = sorted.map((s, idx) => ({
         match_id,
         discord_id: s.discord_id,
@@ -446,30 +388,21 @@ export async function POST(req: Request) {
       const { error: mrErr } = await supabaseAdmin.from("match_results").insert(resultsRows);
       if (mrErr) throw mrErr;
 
-      // update casual counters + round wins
       for (const id of ids) {
-        const curGames = Number(byId[id]?.games_casual ?? 0);
-        const curWI = Number(byId[id]?.wins_imposter_casual ?? 0);
-        const curWC = Number(byId[id]?.wins_crew_casual ?? 0);
-
-        const next = {
-          updated_at: nowIso(),
-          games_casual: curGames + 1,
-          wins_imposter_casual: curWI + Number(roundWinsImposter[id] ?? 0),
-          wins_crew_casual: curWC + Number(roundWinsUnschuldig[id] ?? 0),
-        };
-
-        const { error: updErr } = await supabaseAdmin.from("players").update(next).eq("discord_id", id);
+        const cur = Number(byId[id]?.games_casual ?? 0);
+        const { error: updErr } = await supabaseAdmin
+          .from("players")
+          .update({ updated_at: nowIso(), games_casual: cur + 1 })
+          .eq("discord_id", id);
         if (updErr) throw updErr;
       }
 
-      return j({ ok: true, match_id, aborted: false });
+      return j({ ok: true, match_id, aborted: Boolean(aborted_reason), rounds_saved: hasRounds });
     }
 
-    // --- Ranked Elo: compute base (ties) + lobby multiplier ---
+    // --- ranked ---
     const baseDeltaMap = computeBaseDeltasByTiesFloat(sorted);
 
-    // Elo-before from payload if provided, else current DB elo
     const eloBefore: Record<string, number> = {};
     for (const p of body.players) {
       const id = String(p.discord_id);
@@ -477,7 +410,6 @@ export async function POST(req: Request) {
       else eloBefore[id] = Number(byId[id]?.elo_ranked ?? 1000);
     }
 
-    // Placement flags: first 6 ranked games of that player
     const isPlacement: Record<string, boolean> = {};
     let anyPlacement = false;
     for (const id of ids) {
@@ -487,7 +419,6 @@ export async function POST(req: Request) {
       if (placement) anyPlacement = true;
     }
 
-    // 1) scaled deltas (float) for everyone
     const scaled: Record<string, number> = {};
     for (const s of sorted) {
       const id = s.discord_id;
@@ -497,21 +428,15 @@ export async function POST(req: Request) {
       const avgOthers = (eloBefore[others[0]] + eloBefore[others[1]] + eloBefore[others[2]]) / 3;
 
       d = applyLobbyMultiplierFloat(d, eloBefore[id], avgOthers);
-
-      // placement multiplier only for that player
       if (isPlacement[id]) d = d * PLACEMENT_MULT;
 
       scaled[id] = d;
     }
 
-    // 2) Final deltas:
-    // - if any placement player in the match => NOT zero-sum (by design), just round each
-    // - else => zero-sum normalize+round
     const finalDeltas: Record<string, number> = anyPlacement
       ? Object.fromEntries(ids.map((id) => [id, Math.round(scaled[id] ?? 0)]))
       : normalizeZeroSumAndRound(scaled);
 
-    // 3) Save match_results (placements from sorted order)
     const resultsRows = sorted.map((s, idx) => ({
       match_id,
       discord_id: s.discord_id,
@@ -519,45 +444,42 @@ export async function POST(req: Request) {
       placement: idx + 1,
       elo_delta: finalDeltas[s.discord_id] ?? 0,
     }));
-
     const { error: mrErr } = await supabaseAdmin.from("match_results").insert(resultsRows);
     if (mrErr) throw mrErr;
 
-    // 4) Update players: elo_ranked (with floor), games_ranked++, ranked_games_played++,
-    //    plus round wins counters
     for (const id of ids) {
       const curElo = Number(byId[id]?.elo_ranked ?? 1000);
       const curGR = Number(byId[id]?.games_ranked ?? 0);
       const curRGP = Number(byId[id]?.ranked_games_played ?? 0);
-      const curWI = Number(byId[id]?.wins_imposter_ranked ?? 0);
-      const curWC = Number(byId[id]?.wins_crew_ranked ?? 0);
 
       const delta = Number(finalDeltas[id] ?? 0);
       const nextElo = Math.max(ELO_FLOOR, curElo + delta);
 
-      const next = {
-        updated_at: nowIso(),
-        elo_ranked: nextElo,
-        games_ranked: curGR + 1,
-        ranked_games_played: curRGP + 1,
-        wins_imposter_ranked: curWI + Number(roundWinsImposter[id] ?? 0),
-        wins_crew_ranked: curWC + Number(roundWinsUnschuldig[id] ?? 0),
-      };
-
-      const { error: updErr } = await supabaseAdmin.from("players").update(next).eq("discord_id", id);
+      const { error: updErr } = await supabaseAdmin
+        .from("players")
+        .update({
+          updated_at: nowIso(),
+          elo_ranked: nextElo,
+          games_ranked: curGR + 1,
+          ranked_games_played: curRGP + 1,
+        })
+        .eq("discord_id", id);
       if (updErr) throw updErr;
     }
 
     return j({
       ok: true,
       match_id,
-      aborted: false,
+      aborted: Boolean(aborted_reason),
       anyPlacement,
       placementMult: PLACEMENT_MULT,
       eloFloor: ELO_FLOOR,
+      rounds_saved: hasRounds,
     });
   } catch (err: any) {
-    console.error(err);
-    return j({ ok: false, error: String(err?.message ?? err) }, 500);
+    console.error("API /api/match error:", err);
+    const msg = String(err?.message ?? err);
+    const details = err?.details || err?.hint || err?.code || err?.stack || null;
+    return j({ ok: false, error: msg, details }, 500);
   }
 }
