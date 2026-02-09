@@ -1,15 +1,22 @@
 import { NextResponse } from "next/server";
-
-export const runtime = "nodejs";
-export const dynamic = "force-dynamic";
+import type { NextRequest } from "next/server";
 
 export async function GET(
-  _req: Request,
-  { params }: { params: { discord_id: string } }
+  _req: NextRequest,
+  { params }: { params: Promise<{ discord_id: string }> }
 ) {
+  const { discord_id } = await params;
+
+  if (!discord_id) {
+    return NextResponse.json(
+      { ok: false, message: "discord_id fehlt" },
+      { status: 400 }
+    );
+  }
+
   return NextResponse.json({
     ok: true,
-    message: "PLAYER ROUTE IS WORKING",
-    discord_id: params.discord_id,
+    discord_id,
+    message: "Route funktioniert",
   });
 }
