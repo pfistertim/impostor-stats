@@ -124,31 +124,31 @@ function winMethodLabel(method: string) {
 /* ===================== RANK SYSTEM ===================== */
 
 const RANKS = [
-  { label: "Eisen I", min: 300, badge: "/badges/eisen1.png" },
-  { label: "Eisen II", min: 400, badge: "/badges/eisen2.png" },
-  { label: "Eisen III", min: 500, badge: "/badges/eisen3.png" },
+  { label: "Eisen I", min: 300, badge: "/badges/Eisen1.png" },
+  { label: "Eisen II", min: 400, badge: "/badges/Eisen2.png" },
+  { label: "Eisen III", min: 500, badge: "/badges/Eisen3.png" },
 
-  { label: "Bronze I", min: 600, badge: "/badges/bronze1.png" },
-  { label: "Bronze II", min: 700, badge: "/badges/bronze2.png" },
-  { label: "Bronze III", min: 800, badge: "/badges/bronze3.png" },
+  { label: "Bronze I", min: 600, badge: "/badges/Bronze1.png" },
+  { label: "Bronze II", min: 700, badge: "/badges/Bronze2.png" },
+  { label: "Bronze III", min: 800, badge: "/badges/Bronze3.png" },
 
-  { label: "Silber I", min: 900, badge: "/badges/silber1.png" },
-  { label: "Silber II", min: 1000, badge: "/badges/silber2.png" },
-  { label: "Silber III", min: 1100, badge: "/badges/silber3.png" },
+  { label: "Silber I", min: 900, badge: "/badges/Silber1.png" },
+  { label: "Silber II", min: 1000, badge: "/badges/Silber2.png" },
+  { label: "Silber III", min: 1100, badge: "/badges/Silber3.png" },
 
-  { label: "Gold I", min: 1200, badge: "/badges/gold1.png" },
-  { label: "Gold II", min: 1300, badge: "/badges/gold2.png" },
-  { label: "Gold III", min: 1400, badge: "/badges/gold3.png" },
+  { label: "Gold I", min: 1200, badge: "/badges/Gold1.png" },
+  { label: "Gold II", min: 1300, badge: "/badges/Gold2.png" },
+  { label: "Gold III", min: 1400, badge: "/badges/Gold3.png" },
 
-  { label: "Platin I", min: 1500, badge: "/badges/platin1.png" },
-  { label: "Platin II", min: 1600, badge: "/badges/platin2.png" },
-  { label: "Platin III", min: 1700, badge: "/badges/platin3.png" },
+  { label: "Platin I", min: 1500, badge: "/badges/Platin1.png" },
+  { label: "Platin II", min: 1600, badge: "/badges/Platin2.png" },
+  { label: "Platin III", min: 1700, badge: "/badges/Platin3.png" },
 
-  { label: "Diamant I", min: 1800, badge: "/badges/diamant1.png" },
-  { label: "Diamant II", min: 1900, badge: "/badges/diamant2.png" },
-  { label: "Diamant III", min: 2000, badge: "/badges/diamant3.png" },
+  { label: "Diamant I", min: 1800, badge: "/badges/Diamant1.png" },
+  { label: "Diamant II", min: 1900, badge: "/badges/Diamant2.png" },
+  { label: "Diamant III", min: 2000, badge: "/badges/Diamant3.png" },
 
-  { label: "Master", min: 2100, badge: "/badges/master.png", master: true },
+  { label: "Master", min: 2100, badge: "/badges/Master.png", master: true },
 ];
 
 function getRankInfo(eloRaw: number | null | undefined, gamesRankedRaw: number | null | undefined) {

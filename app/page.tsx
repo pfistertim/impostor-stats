@@ -42,31 +42,31 @@ type RankInfo = {
 };
 
 const RANKS: RankInfo[] = [
-  { label: "Eisen I", min: 300, badgePath: "/badges/eisen1.png" },
-  { label: "Eisen II", min: 400, badgePath: "/badges/eisen2.png" },
-  { label: "Eisen III", min: 500, badgePath: "/badges/eisen3.png" },
+  { label: "Eisen I", min: 300, badgePath: "/badges/Eisen1.png" },
+  { label: "Eisen II", min: 400, badgePath: "/badges/Eisen2.png" },
+  { label: "Eisen III", min: 500, badgePath: "/badges/Eisen3.png" },
 
-  { label: "Bronze I", min: 600, badgePath: "/badges/bronze1.png" },
-  { label: "Bronze II", min: 700, badgePath: "/badges/bronze2.png" },
-  { label: "Bronze III", min: 800, badgePath: "/badges/bronze3.png" },
+  { label: "Bronze I", min: 600, badgePath: "/badges/Bronze1.png" },
+  { label: "Bronze II", min: 700, badgePath: "/badges/Bronze2.png" },
+  { label: "Bronze III", min: 800, badgePath: "/badges/Bronze3.png" },
 
-  { label: "Silber I", min: 900, badgePath: "/badges/silber1.png" },
-  { label: "Silber II", min: 1000, badgePath: "/badges/silber2.png" },
-  { label: "Silber III", min: 1100, badgePath: "/badges/silber3.png" },
+  { label: "Silber I", min: 900, badgePath: "/badges/Silber1.png" },
+  { label: "Silber II", min: 1000, badgePath: "/badges/Silber2.png" },
+  { label: "Silber III", min: 1100, badgePath: "/badges/Silber3.png" },
 
-  { label: "Gold I", min: 1200, badgePath: "/badges/gold1.png" },
-  { label: "Gold II", min: 1300, badgePath: "/badges/gold2.png" },
-  { label: "Gold III", min: 1400, badgePath: "/badges/gold3.png" },
+  { label: "Gold I", min: 1200, badgePath: "/badges/Gold1.png" },
+  { label: "Gold II", min: 1300, badgePath: "/badges/Gold2.png" },
+  { label: "Gold III", min: 1400, badgePath: "/badges/Gold3.png" },
 
-  { label: "Platin I", min: 1500, badgePath: "/badges/platin1.png" },
-  { label: "Platin II", min: 1600, badgePath: "/badges/platin2.png" },
-  { label: "Platin III", min: 1700, badgePath: "/badges/platin3.png" },
+  { label: "Platin I", min: 1500, badgePath: "/badges/Platin1.png" },
+  { label: "Platin II", min: 1600, badgePath: "/badges/Platin2.png" },
+  { label: "Platin III", min: 1700, badgePath: "/badges/Platin3.png" },
 
-  { label: "Diamant I", min: 1800, badgePath: "/badges/diamant1.png" },
-  { label: "Diamant II", min: 1900, badgePath: "/badges/diamant2.png" },
-  { label: "Diamant III", min: 2000, badgePath: "/badges/diamant3.png" },
+  { label: "Diamant I", min: 1800, badgePath: "/badges/Diamant1.png" },
+  { label: "Diamant II", min: 1900, badgePath: "/badges/Diamant2.png" },
+  { label: "Diamant III", min: 2000, badgePath: "/badges/Diamant3.png" },
 
-  { label: "Master", min: 2100, badgePath: "/badges/master.png", isMaster: true },
+  { label: "Master", min: 2100, badgePath: "/badges/Master.png", isMaster: true },
 ];
 
 // Unranked = weniger als 6 ranked games -> Badge unranked, KEINE Elo-Zahl anzeigen
