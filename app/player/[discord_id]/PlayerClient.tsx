@@ -27,8 +27,13 @@ type RecentMatchRow = {
   placement: number | null;
   elo_delta: number | null;
 
-  // Supabase join -> ARRAY
+  // Supabase join -> kann Object oder Array sein
   matches: {
+    id: number;
+    started_at: string | null;
+    ended_at: string | null;
+    mode: "ranked" | "zwanglos" | string;
+  } | {
     id: number;
     started_at: string | null;
     ended_at: string | null;
@@ -44,6 +49,7 @@ type RoundRow = {
   word: string | null;
 
   imposter_discord_id: string | null;
+  imposter_name: string | null;
   winner: string;
   win_method: string;
 
@@ -52,6 +58,14 @@ type RoundRow = {
   
   aborted: boolean;
   aborted_reason: string | null;
+};
+
+type MatchPlayerRow = {
+  discord_id: string;
+  player_name: string;
+  placement: number;
+  total_points: number;
+  elo_delta: number;
 };
 
 // raw from supabase: categories join can arrive as array
@@ -93,6 +107,18 @@ function pct(x: number | null) {
 function winnerLabel(w: string) {
   if (w === "imposter") return "Imposter";
   return "Unschuldig";
+}
+
+function winMethodLabel(method: string) {
+  const map: Record<string, string> = {
+    guessed_word: "Richtig geraten",
+    wrong_guess: "Falsch geraten",
+    voted_out_innocent: "Unschuldigen gewählt",
+    voted_out_imposter: "Imposter gewählt",
+    timeout: "Zeitablauf",
+    other: "Sonstiges",
+  };
+  return map[method] ?? method;
 }
 
 /* ===================== RANK SYSTEM ===================== */
@@ -160,6 +186,7 @@ export default function PlayerClient({ discordId }: { discordId: string }) {
   const [openMatchId, setOpenMatchId] = useState<number | null>(null);
   const [roundsByMatch, setRoundsByMatch] = useState<Record<number, RoundRow[]>>({});
   const [roundsLoading, setRoundsLoading] = useState<Record<number, boolean>>({});
+  const [playersByMatch, setPlayersByMatch] = useState<Record<number, MatchPlayerRow[]>>({});
 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -233,6 +260,17 @@ export default function PlayerClient({ discordId }: { discordId: string }) {
         return;
       }
 
+      // DEBUG: Log the data structure
+      console.log("Match results data:", m.data?.[0]);
+
+      // Sortiere nach Datum (neueste zuerst) - falls Supabase-Sortierung nicht funktioniert
+      const sortedMatches = (m.data ?? []).sort((a: any, b: any) => {
+        const dateA = Array.isArray(a.matches) ? a.matches[0]?.started_at : a.matches?.started_at;
+        const dateB = Array.isArray(b.matches) ? b.matches[0]?.started_at : b.matches?.started_at;
+        if (!dateA || !dateB) return 0;
+        return new Date(dateB).getTime() - new Date(dateA).getTime();
+      });
+
       // 3) Zwanglos 1.-Plätze zählen (count-only)
       const cf = await supabase
         .from("match_results")
@@ -283,7 +321,7 @@ export default function PlayerClient({ discordId }: { discordId: string }) {
 
       if (!cancelled) {
         setPlayer(p.data as PlayerRow);
-        setRecent((m.data ?? []) as RecentMatchRow[]);
+        setRecent(sortedMatches as RecentMatchRow[]);
         setCasualFirsts(casualFirstCount);
         setRankedRoleStats({ impGames, impWins, crewGames, crewWins });
         setLoading(false);
@@ -305,10 +343,11 @@ export default function PlayerClient({ discordId }: { discordId: string }) {
     setOpenMatchId(matchId);
 
     // cached already
-    if (roundsByMatch[matchId]) return;
+    if (roundsByMatch[matchId] && playersByMatch[matchId]) return;
 
     setRoundsLoading((s) => ({ ...s, [matchId]: true }));
 
+    // Lade Runden
     const r = await supabase
       .from("match_rounds")
       .select(
@@ -317,8 +356,27 @@ export default function PlayerClient({ discordId }: { discordId: string }) {
       .eq("match_id", matchId)
       .order("round_no", { ascending: true });
 
+    // Lade alle Spieler für dieses Match
+    const mp = await supabase
+      .from("match_results")
+      .select("discord_id,placement,total_points,elo_delta")
+      .eq("match_id", matchId)
+      .order("placement", { ascending: true });
+
     if (!r.error) {
       const raw = (r.data ?? []) as unknown as RoundRowRaw[];
+
+      // Hole Spielernamen für alle Imposter in diesem Match
+      const imposterIds = [...new Set(raw.map(x => x.imposter_discord_id).filter(Boolean))];
+      const { data: playersData } = await supabase
+        .from("players")
+        .select("discord_id,last_name")
+        .in("discord_id", imposterIds);
+
+      const playerNames = new Map<string, string>();
+      (playersData ?? []).forEach((p: any) => {
+        playerNames.set(p.discord_id, p.last_name ?? p.discord_id);
+      });
 
       const normalized: RoundRow[] = raw.map((x) => ({
         id: Number(x.id),
@@ -327,14 +385,42 @@ export default function PlayerClient({ discordId }: { discordId: string }) {
         winner: String(x.winner ?? ""),
         win_method: String(x.win_method ?? ""),
         imposter_discord_id: x.imposter_discord_id ?? null,
+        imposter_name: x.imposter_discord_id ? playerNames.get(x.imposter_discord_id) ?? x.imposter_discord_id : null,
         points_imposter: Number(x.points_imposter ?? 0),
         points_unschuldig: Number(x.points_unschuldig ?? 0),
         aborted: Boolean(x.aborted),
         aborted_reason: x.aborted_reason ?? null,
-        categoryName: x.categories?.[0]?.name ?? null,
+        // categories kann Object oder Array sein
+        categoryName: Array.isArray(x.categories) 
+          ? x.categories[0]?.name ?? null 
+          : (x.categories as any)?.name ?? null,
       }));
 
       setRoundsByMatch((prev) => ({ ...prev, [matchId]: normalized }));
+    }
+
+    if (!mp.error && mp.data) {
+      // Hole Namen für alle Spieler
+      const allPlayerIds = mp.data.map((p: any) => p.discord_id);
+      const { data: allPlayersData } = await supabase
+        .from("players")
+        .select("discord_id,last_name")
+        .in("discord_id", allPlayerIds);
+
+      const allPlayerNames = new Map<string, string>();
+      (allPlayersData ?? []).forEach((p: any) => {
+        allPlayerNames.set(p.discord_id, p.last_name ?? p.discord_id);
+      });
+
+      const matchPlayers: MatchPlayerRow[] = mp.data.map((p: any) => ({
+        discord_id: p.discord_id,
+        player_name: allPlayerNames.get(p.discord_id) ?? p.discord_id,
+        placement: Number(p.placement ?? 0),
+        total_points: Number(p.total_points ?? 0),
+        elo_delta: Number(p.elo_delta ?? 0),
+      }));
+
+      setPlayersByMatch((prev) => ({ ...prev, [matchId]: matchPlayers }));
     }
 
     setRoundsLoading((s) => ({ ...s, [matchId]: false }));
@@ -372,7 +458,7 @@ export default function PlayerClient({ discordId }: { discordId: string }) {
           </div>
 
           <div className="flex items-center gap-4 rounded-2xl border border-zinc-800 bg-zinc-950/40 px-4 py-3">
-            <img src={rank.badge} alt={rank.label} className="h-16 w-16" />
+            <img src={rank.badge} alt={rank.label} className="h-28 w-auto object-contain" />
             <div>
               <div className="text-xs text-zinc-400">Rank</div>
               <div className="text-xl font-semibold text-zinc-100">
@@ -463,7 +549,8 @@ export default function PlayerClient({ discordId }: { discordId: string }) {
 
             <tbody className="text-zinc-200">
               {recent.map((row) => {
-                const meta = row.matches?.[0];
+                // Supabase kann matches als Object oder Array zurückgeben
+                const meta = Array.isArray(row.matches) ? row.matches[0] : row.matches;
                 const isOpen = openMatchId === row.match_id;
 
                 return (
@@ -487,43 +574,99 @@ export default function PlayerClient({ discordId }: { discordId: string }) {
                     {isOpen && (
                       <tr className="border-t border-zinc-800">
                         <td colSpan={6} className="py-3">
-                          <div className="rounded-xl border border-zinc-800 bg-zinc-950/30 p-4">
-                            {roundsLoading[row.match_id] ? (
-                              <div className="text-sm text-zinc-300">Lade Runden…</div>
-                            ) : (roundsByMatch[row.match_id] ?? []).length === 0 ? (
-                              <div className="text-sm text-zinc-400">Keine Rundendaten gefunden.</div>
-                            ) : (
-                              <div className="overflow-x-auto">
-                                <table className="w-full text-sm">
-                                  <thead className="text-xs text-zinc-400">
-                                    <tr>
-                                      <th className="text-left py-2">Runde</th>
-                                      <th className="py-2">Imposter</th>
-                                      <th className="py-2">Gewinner</th>
-                                      <th className="py-2">Methode</th>
-                                      <th className="py-2">Kategorie</th>
-                                      <th className="py-2">Wort</th>
-                                      <th className="py-2">Punkte I</th>
-                                      <th className="py-2">Punkte U</th>
-                                    </tr>
-                                  </thead>
-                                  <tbody>
-                                    {(roundsByMatch[row.match_id] ?? []).map((rr) => (
-                                      <tr key={rr.id} className={`border-t border-zinc-800 ${rr.aborted ? 'opacity-50' : ''}`}>
-                                        <td className="py-2">{rr.round_no}{rr.aborted ? ' ⚠️' : ''}</td>
-                                        <td className="py-2">{rr.imposter_discord_id ?? "—"}</td>
-                                        <td className="py-2">{rr.aborted ? 'Abgebrochen' : winnerLabel(rr.winner)}</td>
-                                        <td className="py-2">{rr.aborted ? (rr.aborted_reason ?? '—') : rr.win_method}</td>
-                                        <td className="py-2">{rr.categoryName ?? "—"}</td>
-                                        <td className="py-2">{rr.word ?? "—"}</td>
-                                        <td className="py-2">{rr.aborted ? '—' : rr.points_imposter}</td>
-                                        <td className="py-2">{rr.aborted ? '—' : rr.points_unschuldig}</td>
+                          <div className="space-y-4">
+                            {/* Runden-Tabelle */}
+                            <div className="rounded-xl border border-zinc-800 bg-zinc-950/30 p-4">
+                              <div className="mb-2 text-sm font-semibold text-zinc-100">Runden</div>
+                              {roundsLoading[row.match_id] ? (
+                                <div className="text-sm text-zinc-300">Lade Runden…</div>
+                              ) : (roundsByMatch[row.match_id] ?? []).length === 0 ? (
+                                <div className="text-sm text-zinc-400">Keine Rundendaten gefunden.</div>
+                              ) : (
+                                <div className="overflow-x-auto">
+                                  <table className="w-full text-sm">
+                                    <thead className="text-xs text-zinc-400">
+                                      <tr>
+                                        <th className="text-left py-2">Runde</th>
+                                        <th className="py-2">Imposter</th>
+                                        <th className="py-2">Gewinner</th>
+                                        <th className="py-2">Methode</th>
+                                        <th className="py-2">Kategorie</th>
+                                        <th className="py-2">Wort</th>
+                                        <th className="py-2">Punkte I</th>
+                                        <th className="py-2">Punkte U</th>
                                       </tr>
-                                    ))}
-                                  </tbody>
-                                </table>
-                              </div>
-                            )}
+                                    </thead>
+                                    <tbody>
+                                      {(roundsByMatch[row.match_id] ?? []).map((rr) => {
+                                        // Punkte basierend auf Gewinner berechnen
+                                        const pointsImposter = rr.aborted ? 0 : (rr.winner === "imposter" ? 2 : 0);
+                                        const pointsUnschuldig = rr.aborted ? 0 : (rr.winner === "imposter" ? 0 : 1);
+                                        
+                                        return (
+                                        <tr key={rr.id} className={`border-t border-zinc-800 ${rr.aborted ? 'opacity-50' : ''}`}>
+                                          <td className="py-2">{rr.round_no}{rr.aborted ? ' ⚠️' : ''}</td>
+                                          <td className="py-2">{rr.imposter_name ?? "—"}</td>
+                                          <td className="py-2">{rr.aborted ? 'Abgebrochen' : winnerLabel(rr.winner)}</td>
+                                          <td className="py-2">{rr.aborted ? (rr.aborted_reason ?? '—') : winMethodLabel(rr.win_method)}</td>
+                                          <td className="py-2">{rr.categoryName ?? "—"}</td>
+                                          <td className="py-2">{rr.word ?? "—"}</td>
+                                          <td className="py-2">{rr.aborted ? '—' : pointsImposter}</td>
+                                          <td className="py-2">{rr.aborted ? '—' : pointsUnschuldig}</td>
+                                        </tr>
+                                        );
+                                      })}
+                                    </tbody>
+                                  </table>
+                                </div>
+                              )}
+                            </div>
+
+                            {/* Spieler-Rangliste */}
+                            <div className="rounded-xl border border-zinc-800 bg-zinc-950/30 p-4">
+                              <div className="mb-2 text-sm font-semibold text-zinc-100">Spieler-Rangliste</div>
+                              {roundsLoading[row.match_id] ? (
+                                <div className="text-sm text-zinc-300">Lade Spieler…</div>
+                              ) : (playersByMatch[row.match_id] ?? []).length === 0 ? (
+                                <div className="text-sm text-zinc-400">Keine Spielerdaten gefunden.</div>
+                              ) : (
+                                <div className="overflow-x-auto">
+                                  <table className="w-full text-sm">
+                                    <thead className="text-xs text-zinc-400">
+                                      <tr>
+                                        <th className="text-left py-2">Platz</th>
+                                        <th className="text-left py-2">Spieler</th>
+                                        <th className="text-center py-2">Punkte</th>
+                                        <th className="text-center py-2">Elo Δ</th>
+                                      </tr>
+                                    </thead>
+                                    <tbody>
+                                      {(playersByMatch[row.match_id] ?? []).map((mp) => (
+                                        <tr key={mp.discord_id} className="border-t border-zinc-800">
+                                          <td className="py-2">{mp.placement}</td>
+                                          <td className="py-2">
+                                            <Link 
+                                              href={`/player/${encodeURIComponent(mp.discord_id)}`}
+                                              className="text-blue-400 hover:text-blue-300 hover:underline"
+                                            >
+                                              {mp.player_name}
+                                            </Link>
+                                          </td>
+                                          <td className="py-2 text-center">{mp.total_points}</td>
+                                          <td className="py-2 text-center">
+                                            {meta?.mode === "zwanglos" ? "—" : (
+                                              <span className={mp.elo_delta >= 0 ? "text-green-400" : "text-red-400"}>
+                                                {mp.elo_delta >= 0 ? "+" : ""}{mp.elo_delta}
+                                              </span>
+                                            )}
+                                          </td>
+                                        </tr>
+                                      ))}
+                                    </tbody>
+                                  </table>
+                                </div>
+                              )}
+                            </div>
                           </div>
                         </td>
                       </tr>
