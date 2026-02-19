@@ -29,7 +29,9 @@ type RecentMatchRow = {
 
   // Supabase join -> ARRAY
   matches: {
+    id: number;
     started_at: string | null;
+    ended_at: string | null;
     mode: "ranked" | "zwanglos" | string;
   }[];
 };
@@ -47,6 +49,9 @@ type RoundRow = {
 
   points_imposter: number;
   points_unschuldig: number;
+  
+  aborted: boolean;
+  aborted_reason: string | null;
 };
 
 // raw from supabase: categories join can arrive as array
@@ -59,6 +64,8 @@ type RoundRowRaw = {
   imposter_discord_id: any;
   points_imposter: any;
   points_unschuldig: any;
+  aborted: any;
+  aborted_reason: any;
   categories: { name: any }[] | null;
 };
 
@@ -213,7 +220,7 @@ export default function PlayerClient({ discordId }: { discordId: string }) {
       // 2) letzte 20 matches
       const m = await supabase
         .from("match_results")
-        .select("match_id,total_points,placement,elo_delta,matches!inner(started_at,mode)")
+        .select("match_id,total_points,placement,elo_delta,matches!inner(id,started_at,ended_at,mode)")
         .eq("discord_id", id)
         .order("started_at", { foreignTable: "matches", ascending: false })
         .limit(20);
@@ -305,7 +312,7 @@ export default function PlayerClient({ discordId }: { discordId: string }) {
     const r = await supabase
       .from("match_rounds")
       .select(
-        "id,round_no,word,winner,win_method,imposter_discord_id,points_imposter,points_unschuldig,categories(name)"
+        "id,round_no,word,winner,win_method,imposter_discord_id,points_imposter,points_unschuldig,aborted,aborted_reason,categories(name)"
       )
       .eq("match_id", matchId)
       .order("round_no", { ascending: true });
@@ -322,6 +329,8 @@ export default function PlayerClient({ discordId }: { discordId: string }) {
         imposter_discord_id: x.imposter_discord_id ?? null,
         points_imposter: Number(x.points_imposter ?? 0),
         points_unschuldig: Number(x.points_unschuldig ?? 0),
+        aborted: Boolean(x.aborted),
+        aborted_reason: x.aborted_reason ?? null,
         categoryName: x.categories?.[0]?.name ?? null,
       }));
 
@@ -464,7 +473,7 @@ export default function PlayerClient({ discordId }: { discordId: string }) {
                       <td className="py-2">{meta?.mode ?? "—"}</td>
                       <td className="py-2">{row.placement ?? "—"}</td>
                       <td className="py-2">{row.total_points ?? "—"}</td>
-                      <td className="py-2">{row.elo_delta ?? 0}</td>
+                      <td className="py-2">{meta?.mode === "zwanglos" ? "—" : (row.elo_delta ?? 0)}</td>
                       <td className="py-2">
                         <button
                           className="rounded-lg border border-zinc-700 bg-zinc-950/30 px-2 py-1 text-xs hover:bg-zinc-950/60"
@@ -500,15 +509,15 @@ export default function PlayerClient({ discordId }: { discordId: string }) {
                                   </thead>
                                   <tbody>
                                     {(roundsByMatch[row.match_id] ?? []).map((rr) => (
-                                      <tr key={rr.id} className="border-t border-zinc-800">
-                                        <td className="py-2">{rr.round_no}</td>
+                                      <tr key={rr.id} className={`border-t border-zinc-800 ${rr.aborted ? 'opacity-50' : ''}`}>
+                                        <td className="py-2">{rr.round_no}{rr.aborted ? ' ⚠️' : ''}</td>
                                         <td className="py-2">{rr.imposter_discord_id ?? "—"}</td>
-                                        <td className="py-2">{winnerLabel(rr.winner)}</td>
-                                        <td className="py-2">{rr.win_method}</td>
+                                        <td className="py-2">{rr.aborted ? 'Abgebrochen' : winnerLabel(rr.winner)}</td>
+                                        <td className="py-2">{rr.aborted ? (rr.aborted_reason ?? '—') : rr.win_method}</td>
                                         <td className="py-2">{rr.categoryName ?? "—"}</td>
                                         <td className="py-2">{rr.word ?? "—"}</td>
-                                        <td className="py-2">{rr.points_imposter}</td>
-                                        <td className="py-2">{rr.points_unschuldig}</td>
+                                        <td className="py-2">{rr.aborted ? '—' : rr.points_imposter}</td>
+                                        <td className="py-2">{rr.aborted ? '—' : rr.points_unschuldig}</td>
                                       </tr>
                                     ))}
                                   </tbody>

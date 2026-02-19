@@ -35,13 +35,12 @@ type RoundInBot = {
 };
 
 type Payload = {
-  guild_id: string;
+  guild_id: string; // ✅ existiert bei dir in matches & player_violations
   mode: ModeIn;
   started_at?: string | null;
   ended_at?: string | null;
 
   players: PlayerIn[];
-
   rounds?: RoundInBot[] | null;
 
   ended_reason?: string | null;
@@ -50,7 +49,7 @@ type Payload = {
   violation?: {
     type: "afk" | "unangemessen" | "left_voice";
     discord_id: string;
-    round_no?: number | null;
+    round_no?: number | null; // kommt evtl. vom Bot, aber wir speichern in Variante B KEIN round_id
   } | null;
 };
 
@@ -65,6 +64,26 @@ const ELO_FLOOR = 300;
 const PLACEMENT_GAMES = 6;
 const PLACEMENT_MULT = 3;
 const CASUAL_REQUIRED_FOR_RANKED = 5;
+
+/**
+ * Escalation:
+ * 1: 30m
+ * 2: 1h
+ * 3: 2h
+ * 4: 4h
+ * 5: 8h
+ * 6: 16h
+ * 7+: 24h (8,9,10,... auch 24h)
+ */
+function penaltyMsForCount(countAfter: number) {
+  if (countAfter <= 1) return 30 * 60 * 1000;
+  if (countAfter === 2) return 60 * 60 * 1000;
+  if (countAfter === 3) return 2 * 60 * 60 * 1000;
+  if (countAfter === 4) return 4 * 60 * 60 * 1000;
+  if (countAfter === 5) return 8 * 60 * 60 * 1000;
+  if (countAfter === 6) return 16 * 60 * 60 * 1000;
+  return 24 * 60 * 60 * 1000;
+}
 
 function readBotToken(req: Request) {
   const auth = req.headers.get("authorization") || "";
@@ -85,14 +104,13 @@ function mapWinMethod(raw?: string | null): WinMethodDb {
   const s = String(raw ?? "").trim().toLowerCase();
 
   if (s === "imposter_correct_guess" || s === "guessed_word") return "guessed_word";
-  if (s === "wrong_guess" || s === "imposter_wrong_guess" || s === "all_imposters_guessed_wrong") return "wrong_guess";
+  if (s === "wrong_guess" || s === "imposter_wrong_guess" || s === "all_imposters_guessed_wrong")
+    return "wrong_guess";
 
   if (s === "voted_out_wrong" || s === "voted_out_innocent") return "voted_out_innocent";
   if (s === "voted_out_imposter_no_guess" || s === "voted_out_imposter") return "voted_out_imposter";
 
   if (s === "timeout") return "timeout";
-
-  if (s.includes("imposter") || s.includes("crew") || s.includes("out") || s.includes("left")) return "other";
   return "other";
 }
 
@@ -203,6 +221,69 @@ function normalizeZeroSumAndRound(deltasFloat: Record<string, number>) {
   return rounded;
 }
 
+/**
+ * ✅ VARIANTE B:
+ * - player_violations.round_id bleibt NULL
+ * - Website sieht nur: Match aborted_reason = "violation:xxx"
+ * - Violations zählen pro Server: guild_id + discord_id
+ *
+ * Deine player_violations Spalten (Screenshot):
+ * - guild_id (text)
+ * - discord_id (text)
+ * - violation_type (text)
+ * - source (text)
+ * - match_id (int8)
+ * - round_id (int8 nullable)  <-- bleibt NULL
+ * - created_at (timestamptz)
+ */
+async function insertViolationAndReturnPenalty(args: {
+  guild_id: string;
+  discord_id: string;
+  violation_type: "afk" | "unangemessen" | "left_voice";
+  match_id: number;
+}) {
+  const { guild_id, discord_id, violation_type, match_id } = args;
+
+  const { error: insErr } = await supabaseAdmin.from("player_violations").insert([
+    {
+      guild_id,
+      discord_id,
+      violation_type,
+      source: "discord",
+      match_id,
+      round_id: null,
+      created_at: nowIso(),
+    },
+  ]);
+  if (insErr) throw insErr;
+
+  const { count, error: cErr } = await supabaseAdmin
+    .from("player_violations")
+    .select("id", { count: "exact", head: true })
+    .eq("guild_id", guild_id)
+    .eq("discord_id", discord_id);
+  if (cErr) throw cErr;
+
+  const violations_count = Number(count ?? 0);
+  const penalty_ms = penaltyMsForCount(violations_count);
+  const penalty_until = new Date(Date.now() + penalty_ms).toISOString();
+
+  // ✅ In players auch “anerkennen”
+  // (deine players Tabelle hat: violations_count, banned_until, last_violation_at)
+  const { error: updErr } = await supabaseAdmin
+    .from("players")
+    .update({
+      violations_count,
+      banned_until: penalty_until,
+      last_violation_at: nowIso(),
+      updated_at: nowIso(),
+    })
+    .eq("discord_id", discord_id);
+  if (updErr) throw updErr;
+
+  return { violations_count, penalty_ms, penalty_until };
+}
+
 export async function POST(req: Request) {
   let body: Payload | null = null;
 
@@ -230,7 +311,6 @@ export async function POST(req: Request) {
 
     const modeDb = normalizeMode(body.mode);
     const guild_id = String(body.guild_id);
-
     const ids = body.players.map((p) => String(p.discord_id));
 
     // Upsert players (Name)
@@ -275,15 +355,15 @@ export async function POST(req: Request) {
     const rounds: RoundInBot[] = Array.isArray(body.rounds) ? body.rounds : [];
     const hasRounds = rounds.length > 0;
 
-    // ✅ FIX 1: ended_at IMMER setzen (sonst "zwanglos" verschwindet oft im Frontend)
+    // ✅ ended_at IMMER setzen
     const startedAtIso = body.started_at ? new Date(body.started_at).toISOString() : nowIso();
     const endedAtIso = body.ended_at ? new Date(body.ended_at).toISOString() : nowIso();
 
-    // ✅ FIX 2: aborted_reason NUR bei echten Abbrüchen/Violations setzen
+    // ✅ aborted_reason NUR bei violation / abort_reason
     const aborted_reason =
       body.violation?.type ? `violation:${body.violation.type}` : (body.abort_reason ?? null);
 
-    // Create match
+    // Create match (dein matches hat guild_id)
     const { data: match, error: matchErr } = await supabaseAdmin
       .from("matches")
       .insert([
@@ -300,6 +380,35 @@ export async function POST(req: Request) {
     if (matchErr) throw matchErr;
 
     const match_id = match.id as number;
+
+    // ✅ Violation speichern + Eskalation berechnen (VARIANTE B -> round_id bleibt NULL)
+    let violationResult:
+      | null
+      | {
+          discord_id: string;
+          violation_type: string;
+          violations_count: number;
+          penalty_ms: number;
+          penalty_until: string;
+        } = null;
+
+    if (body.violation?.type && body.violation?.discord_id) {
+      const v = body.violation;
+      const vr = await insertViolationAndReturnPenalty({
+        guild_id,
+        match_id,
+        discord_id: String(v.discord_id),
+        violation_type: v.type,
+      });
+
+      violationResult = {
+        discord_id: String(v.discord_id),
+        violation_type: v.type,
+        violations_count: vr.violations_count,
+        penalty_ms: vr.penalty_ms,
+        penalty_until: vr.penalty_until,
+      };
+    }
 
     // Compute points
     const points: Record<string, number> = {};
@@ -318,6 +427,7 @@ export async function POST(req: Request) {
         const category_id = await getOrCreateCategoryId(category_slug, category_name);
         const win_method_db = mapWinMethod(r.win_method ?? null);
 
+        // ✅ match_rounds Schema bei dir hat zusätzliche Felder
         roundInsert.push({
           match_id,
           round_no,
@@ -326,6 +436,13 @@ export async function POST(req: Request) {
           imposter_discord_id: String(r.imposter_discord_id),
           winner: r.winner,
           win_method: win_method_db,
+
+          // diese Felder existieren bei dir:
+          points_imposter: 2,
+          points_unschuldig: 1,
+          started_at: null,
+          ended_at: null,
+          skipped: false,
           aborted: Boolean(r.aborted),
           aborted_reason: r.aborted_reason ?? null,
         });
@@ -337,7 +454,7 @@ export async function POST(req: Request) {
         .select("id, imposter_discord_id, winner, aborted");
       if (roundErr) throw roundErr;
 
-      // round_player_points rows
+      // round_player_points rows (dein table: round_id, discord_id, points)
       const rppRows: { round_id: number; discord_id: string; points: number }[] = [];
 
       for (const ir of insertedRounds ?? []) {
@@ -397,7 +514,7 @@ export async function POST(req: Request) {
         if (updErr) throw updErr;
       }
 
-      return j({ ok: true, match_id, aborted: Boolean(aborted_reason), rounds_saved: hasRounds });
+      return j({ ok: true, match_id, aborted: Boolean(aborted_reason), rounds_saved: hasRounds, violation: violationResult });
     }
 
     // --- ranked ---
@@ -475,6 +592,7 @@ export async function POST(req: Request) {
       placementMult: PLACEMENT_MULT,
       eloFloor: ELO_FLOOR,
       rounds_saved: hasRounds,
+      violation: violationResult,
     });
   } catch (err: any) {
     console.error("API /api/match error:", err);
