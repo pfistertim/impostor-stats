@@ -222,6 +222,136 @@ function normalizeZeroSumAndRound(deltasFloat: Record<string, number>) {
 }
 
 /**
+ * ✅ DUO-MODE Handler
+ */
+async function handleDuoMatch(body: any) {
+  const guild_id = String(body.guild_id);
+  const teams = body.teams ?? [];
+
+  if (!Array.isArray(teams) || teams.length !== 4) {
+    return j({ ok: false, error: "expected 4 teams" }, 400);
+  }
+
+  // Alle Spieler-IDs sammeln
+  const allPlayerIds: string[] = [];
+  for (const team of teams) {
+    if (team.captain_discord_id) allPlayerIds.push(String(team.captain_discord_id));
+    if (team.member_discord_id) allPlayerIds.push(String(team.member_discord_id));
+  }
+
+  // Spieler upserten (Namen aktualisieren)
+  const upsertPlayers = allPlayerIds.map((id) => ({
+    discord_id: id,
+    updated_at: nowIso(),
+  }));
+  const { error: upsertErr } = await supabaseAdmin
+    .from("players")
+    .upsert(upsertPlayers, { onConflict: "discord_id" });
+  if (upsertErr) throw upsertErr;
+
+  // Match erstellen
+  const startedAtIso = body.started_at ? new Date(body.started_at).toISOString() : nowIso();
+  const endedAtIso = body.ended_at ? new Date(body.ended_at).toISOString() : nowIso();
+  const aborted_reason = body.violation?.type ? `violation:${body.violation.type}` : (body.abort_reason ?? null);
+
+  const { data: match, error: matchErr } = await supabaseAdmin
+    .from("matches")
+    .insert([
+      {
+        guild_id,
+        mode: "duo",
+        started_at: startedAtIso,
+        ended_at: endedAtIso,
+        aborted_reason,
+      },
+    ])
+    .select("id")
+    .single();
+  if (matchErr) throw matchErr;
+
+  const match_id = match.id as number;
+
+  // Teams speichern
+  const teamInserts = teams.map((team: any) => ({
+    match_id,
+    team_index: Number(team.team_index ?? 0),
+    captain_discord_id: String(team.captain_discord_id ?? ""),
+    member_discord_id: String(team.member_discord_id ?? ""),
+    score: Number(team.score ?? 0),
+    coins_earned: Number(team.coins_earned ?? 0),
+  }));
+
+  const { error: teamsErr } = await supabaseAdmin.from("duo_teams").insert(teamInserts);
+  if (teamsErr) throw teamsErr;
+
+  // Coins aktualisieren für alle Spieler
+  for (const team of teams) {
+    const coinsEarned = Number(team.coins_earned ?? 0);
+    
+    for (const playerId of [team.captain_discord_id, team.member_discord_id]) {
+      if (!playerId) continue;
+      
+      // Aktuelle Coins holen
+      const { data: playerData } = await supabaseAdmin
+        .from("players")
+        .select("duo_coins, duo_games")
+        .eq("discord_id", playerId)
+        .single();
+
+      const currentCoins = Number(playerData?.duo_coins ?? 100);
+      const currentGames = Number(playerData?.duo_games ?? 0);
+      
+      // Neue Coins berechnen (min 0)
+      const newCoins = Math.max(0, currentCoins + coinsEarned);
+
+      // Update
+      const { error: updateErr } = await supabaseAdmin
+        .from("players")
+        .update({
+          duo_coins: newCoins,
+          duo_games: currentGames + 1,
+          updated_at: nowIso(),
+        })
+        .eq("discord_id", playerId);
+
+      if (updateErr) throw updateErr;
+    }
+  }
+
+  // Runden speichern (falls vorhanden)
+  const rounds = body.rounds ?? [];
+  if (Array.isArray(rounds) && rounds.length > 0) {
+    const roundInserts = rounds.map((r: any, idx: number) => ({
+      match_id,
+      round_no: Number(r.round_no ?? r.round ?? idx + 1),
+      category_id: null, // TODO: Category mapping für Duo
+      word: r.word ?? null,
+      imposter_discord_id: r.imposter_discord_id ?? null,
+      winner: r.winner ?? "unschuldig",
+      win_method: mapWinMethod(r.win_method ?? null),
+      points_imposter: 2,
+      points_unschuldig: 1,
+      started_at: null,
+      ended_at: null,
+      skipped: false,
+      aborted: Boolean(r.aborted),
+      aborted_reason: r.aborted_reason ?? null,
+    }));
+
+    const { error: roundsErr } = await supabaseAdmin.from("match_rounds").insert(roundInserts);
+    if (roundsErr) throw roundsErr;
+  }
+
+  return j({
+    ok: true,
+    match_id,
+    mode: "duo",
+    teams_saved: teams.length,
+    rounds_saved: rounds.length,
+  });
+}
+
+/**
  * ✅ VARIANTE B:
  * - player_violations.round_id bleibt NULL
  * - Website sieht nur: Match aborted_reason = "violation:xxx"
@@ -285,7 +415,7 @@ async function insertViolationAndReturnPenalty(args: {
 }
 
 export async function POST(req: Request) {
-  let body: Payload | null = null;
+  let body: any = null;
 
   try {
     const token = readBotToken(req);
@@ -302,8 +432,18 @@ export async function POST(req: Request) {
       return j({ ok: false, error: "invalid json" }, 400);
     }
 
-    if (!body?.guild_id || !body?.mode || !Array.isArray(body.players)) {
+    if (!body?.guild_id || !body?.mode) {
       return j({ ok: false, error: "missing fields" }, 400);
+    }
+
+    // ✅ DUO-MODE: Separate Logik
+    if (body.mode === "duo") {
+      return await handleDuoMatch(body);
+    }
+
+    // ✅ RANKED/CASUAL: Bestehende Logik
+    if (!Array.isArray(body.players)) {
+      return j({ ok: false, error: "missing players" }, 400);
     }
     if (body.players.length !== 4) {
       return j({ ok: false, error: "expected 4 players", got: body.players.length }, 400);
@@ -311,10 +451,10 @@ export async function POST(req: Request) {
 
     const modeDb = normalizeMode(body.mode);
     const guild_id = String(body.guild_id);
-    const ids = body.players.map((p) => String(p.discord_id));
+    const ids = body.players.map((p: any) => String(p.discord_id));
 
     // Upsert players (Name)
-    const upsertPlayers = body.players.map((p) => ({
+    const upsertPlayers = body.players.map((p: any) => ({
       discord_id: String(p.discord_id),
       last_name: p.display_name ?? null,
       updated_at: nowIso(),
@@ -541,7 +681,7 @@ export async function POST(req: Request) {
       const id = s.discord_id;
       let d = baseDeltaMap.get(id) ?? 0;
 
-      const others = ids.filter((x) => x !== id);
+      const others = ids.filter((x: string) => x !== id);
       const avgOthers = (eloBefore[others[0]] + eloBefore[others[1]] + eloBefore[others[2]]) / 3;
 
       d = applyLobbyMultiplierFloat(d, eloBefore[id], avgOthers);
@@ -551,7 +691,7 @@ export async function POST(req: Request) {
     }
 
     const finalDeltas: Record<string, number> = anyPlacement
-      ? Object.fromEntries(ids.map((id) => [id, Math.round(scaled[id] ?? 0)]))
+      ? Object.fromEntries(ids.map((id: string) => [id, Math.round(scaled[id] ?? 0)]))
       : normalizeZeroSumAndRound(scaled);
 
     const resultsRows = sorted.map((s, idx) => ({
