@@ -222,32 +222,32 @@ function normalizeZeroSumAndRound(deltasFloat: Record<string, number>) {
 }
 
 /**
- * ✅ DUO-MODE Handler
+ * ✅ DUO-MODE Handler - Gleiche Struktur wie Ranked/Zwanglos
  */
 async function handleDuoMatch(body: any) {
+  console.log("[handleDuoMatch] Starting...");
   const guild_id = String(body.guild_id);
-  const teams = body.teams ?? [];
+  const players = body.players ?? [];
+  
+  console.log("[handleDuoMatch] Players count:", players.length);
 
-  if (!Array.isArray(teams) || teams.length !== 4) {
-    return j({ ok: false, error: "expected 4 teams" }, 400);
+  if (!Array.isArray(players) || players.length !== 8) {
+    console.log("[handleDuoMatch] Invalid player count:", players.length);
+    return j({ ok: false, error: "expected 8 players for duo mode" }, 400);
   }
 
-  // Alle Spieler-IDs sammeln
-  const allPlayerIds: string[] = [];
-  for (const team of teams) {
-    if (team.captain_discord_id) allPlayerIds.push(String(team.captain_discord_id));
-    if (team.member_discord_id) allPlayerIds.push(String(team.member_discord_id));
-  }
-
-  // Spieler upserten (Namen aktualisieren)
-  const upsertPlayers = allPlayerIds.map((id) => ({
-    discord_id: id,
+  // Spieler upserten (ohne display_name, da Spalte nicht existiert)
+  const upsertPlayers = players.map((p: any) => ({
+    discord_id: String(p.discord_id),
     updated_at: nowIso(),
   }));
   const { error: upsertErr } = await supabaseAdmin
     .from("players")
     .upsert(upsertPlayers, { onConflict: "discord_id" });
-  if (upsertErr) throw upsertErr;
+  if (upsertErr) {
+    console.error("[handleDuoMatch] Error upserting players:", upsertErr);
+    throw upsertErr;
+  }
 
   // Match erstellen
   const startedAtIso = body.started_at ? new Date(body.started_at).toISOString() : nowIso();
@@ -271,84 +271,145 @@ async function handleDuoMatch(body: any) {
 
   const match_id = match.id as number;
 
-  // Teams speichern
-  const teamInserts = teams.map((team: any) => ({
+  // ✅ Violation speichern (falls vorhanden)
+  if (body.violation?.type && body.violation?.discord_ids) {
+    const v = body.violation;
+    const discordIds = Array.isArray(v.discord_ids) ? v.discord_ids : [v.discord_ids];
+    
+    for (const discordId of discordIds) {
+      if (!discordId) continue;
+      
+      const { error: insErr } = await supabaseAdmin.from("player_violations").insert([
+        {
+          guild_id,
+          discord_id: String(discordId),
+          violation_type: v.type,
+          source: "discord",
+          match_id,
+          round_id: null,
+          created_at: nowIso(),
+        },
+      ]);
+      if (insErr) throw insErr;
+
+      // Penalty berechnen und anwenden
+      const { count, error: cErr } = await supabaseAdmin
+        .from("player_violations")
+        .select("id", { count: "exact", head: true })
+        .eq("guild_id", guild_id)
+        .eq("discord_id", discordId);
+      if (cErr) throw cErr;
+
+      const violations_count = Number(count ?? 0);
+      const penalty_ms = penaltyMsForCount(violations_count);
+      const penalty_until = new Date(Date.now() + penalty_ms).toISOString();
+
+      await supabaseAdmin
+        .from("players")
+        .update({
+          violations_count,
+          banned_until: penalty_until,
+          last_violation_at: nowIso(),
+          updated_at: nowIso(),
+        })
+        .eq("discord_id", discordId);
+    }
+  }
+
+  // ✅ Teams aus Players-Array extrahieren und speichern
+  const teamsByIndex = new Map<number, { captain: any; member: any; score: number; coins: number }>();
+  
+  for (const player of players) {
+    const teamIdx = Number(player.team_index ?? 0);
+    const isCaptain = Boolean(player.is_captain);
+    const coinsEarned = Number(player.coins_earned ?? 0);
+    const score = Number(player.total_points ?? 0);
+    
+    if (!teamsByIndex.has(teamIdx)) {
+      teamsByIndex.set(teamIdx, { captain: null, member: null, score: 0, coins: coinsEarned });
+    }
+    
+    const team = teamsByIndex.get(teamIdx)!;
+    if (isCaptain) {
+      team.captain = player;
+    } else {
+      team.member = player;
+    }
+    team.score = Math.max(team.score, score); // Nehme höchsten Score (sollte gleich sein)
+  }
+
+  // Teams in DB speichern
+  const teamInserts = Array.from(teamsByIndex.entries()).map(([teamIdx, team]) => ({
     match_id,
-    team_index: Number(team.team_index ?? 0),
-    captain_discord_id: String(team.captain_discord_id ?? ""),
-    member_discord_id: String(team.member_discord_id ?? ""),
-    score: Number(team.score ?? 0),
-    coins_earned: Number(team.coins_earned ?? 0),
+    team_index: teamIdx,
+    captain_discord_id: String(team.captain?.discord_id ?? ""),
+    member_discord_id: String(team.member?.discord_id ?? ""),
+    score: team.score,
+    coins_earned: team.coins,
   }));
 
   const { error: teamsErr } = await supabaseAdmin.from("duo_teams").insert(teamInserts);
   if (teamsErr) throw teamsErr;
 
-  // Coins aktualisieren für alle Spieler
-  for (const team of teams) {
-    const coinsEarned = Number(team.coins_earned ?? 0);
+  // ✅ Coins und Spiele-Anzahl aktualisieren
+  for (const player of players) {
+    const coinsEarned = Number(player.coins_earned ?? 0);
+    const playerId = String(player.discord_id);
     
-    for (const playerId of [team.captain_discord_id, team.member_discord_id]) {
-      if (!playerId) continue;
+    // Aktuelle Werte holen
+    const { data: playerData } = await supabaseAdmin
+      .from("players")
+      .select("duo_coins, duo_games")
+      .eq("discord_id", playerId)
+      .single();
+
+    const currentCoins = Number(playerData?.duo_coins ?? 100);
+    const currentGames = Number(playerData?.duo_games ?? 0);
+    
+    // Neue Coins berechnen (min 0)
+    const newCoins = Math.max(0, currentCoins + coinsEarned);
+
+    // Update
+    const { error: updateErr } = await supabaseAdmin
+      .from("players")
+      .update({
+        duo_coins: newCoins,
+        duo_games: currentGames + 1,
+        updated_at: nowIso(),
+      })
+      .eq("discord_id", playerId);
+
+    if (updateErr) throw updateErr;
+  }
+
+  // ✅ Runden speichern (falls vorhanden)
+  const rounds = body.rounds ?? [];
+  if (Array.isArray(rounds) && rounds.length > 0) {
+    for (const r of rounds) {
+      const categoryId = await getOrCreateCategoryId(r.category_slug ?? r.category, r.category_name ?? r.category);
       
-      // Aktuelle Coins holen
-      const { data: playerData } = await supabaseAdmin
-        .from("players")
-        .select("duo_coins, duo_games")
-        .eq("discord_id", playerId)
+      const { data: round, error: roundErr } = await supabaseAdmin
+        .from("match_rounds")
+        .insert([
+          {
+            match_id,
+            round_no: Number(r.round_no ?? r.round ?? 1),
+            category_id: categoryId,
+            word: r.word ?? null,
+            imposter_discord_id: r.imposter_discord_id ?? null,
+            winner: r.winner ?? null,
+            win_method: mapWinMethod(r.win_method),
+            aborted: Boolean(r.aborted),
+            aborted_reason: r.aborted_reason ?? null,
+          },
+        ])
+        .select("id")
         .single();
-
-      const currentCoins = Number(playerData?.duo_coins ?? 100);
-      const currentGames = Number(playerData?.duo_games ?? 0);
-      
-      // Neue Coins berechnen (min 0)
-      const newCoins = Math.max(0, currentCoins + coinsEarned);
-
-      // Update
-      const { error: updateErr } = await supabaseAdmin
-        .from("players")
-        .update({
-          duo_coins: newCoins,
-          duo_games: currentGames + 1,
-          updated_at: nowIso(),
-        })
-        .eq("discord_id", playerId);
-
-      if (updateErr) throw updateErr;
+      if (roundErr) throw roundErr;
     }
   }
 
-  // Runden speichern (falls vorhanden)
-  const rounds = body.rounds ?? [];
-  if (Array.isArray(rounds) && rounds.length > 0) {
-    const roundInserts = rounds.map((r: any, idx: number) => ({
-      match_id,
-      round_no: Number(r.round_no ?? r.round ?? idx + 1),
-      category_id: null, // TODO: Category mapping für Duo
-      word: r.word ?? null,
-      imposter_discord_id: r.imposter_discord_id ?? null,
-      winner: r.winner ?? "unschuldig",
-      win_method: mapWinMethod(r.win_method ?? null),
-      points_imposter: 2,
-      points_unschuldig: 1,
-      started_at: null,
-      ended_at: null,
-      skipped: false,
-      aborted: Boolean(r.aborted),
-      aborted_reason: r.aborted_reason ?? null,
-    }));
-
-    const { error: roundsErr } = await supabaseAdmin.from("match_rounds").insert(roundInserts);
-    if (roundsErr) throw roundsErr;
-  }
-
-  return j({
-    ok: true,
-    match_id,
-    mode: "duo",
-    teams_saved: teams.length,
-    rounds_saved: rounds.length,
-  });
+  return j({ ok: true, match_id });
 }
 
 /**
@@ -438,7 +499,11 @@ export async function POST(req: Request) {
 
     // ✅ DUO-MODE: Separate Logik
     if (body.mode === "duo") {
-      return await handleDuoMatch(body);
+      console.log("[API] Duo mode detected, calling handleDuoMatch");
+      console.log("[API] Duo payload:", JSON.stringify(body, null, 2));
+      const result = await handleDuoMatch(body);
+      console.log("[API] handleDuoMatch result:", JSON.stringify(result, null, 2));
+      return result;
     }
 
     // ✅ RANKED/CASUAL: Bestehende Logik
