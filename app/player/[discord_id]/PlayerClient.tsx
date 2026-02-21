@@ -28,6 +28,7 @@ type RecentMatchRow = {
   total_points: number | null;
   placement: number | null;
   elo_delta: number | null;
+  coins_earned: number | null;
 
   // Supabase join -> kann Object oder Array sein
   matches: {
@@ -1186,7 +1187,7 @@ export default function PlayerClient({ discordId }: { discordId: string }) {
                           <span className="text-zinc-400">—</span>
                         ) : meta?.mode === "duo" ? (
                           <span className="inline-block px-2 py-1 rounded text-xs font-semibold bg-gradient-to-r from-orange-900/60 to-orange-800/60 border border-orange-500/30 text-orange-100">
-                            {row.duo_coins_delta ? `${row.duo_coins_delta >= 0 ? "+" : ""}${row.duo_coins_delta}` : "—"}
+                            {row.coins_earned ? `${row.coins_earned >= 0 ? "+" : ""}${row.coins_earned}` : "—"}
                           </span>
                         ) : (
                           <span className={
