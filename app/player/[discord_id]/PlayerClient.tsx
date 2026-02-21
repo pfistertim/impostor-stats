@@ -13,6 +13,8 @@ type PlayerRow = {
 
   games_ranked: number | null;
   games_casual: number | null;
+  duo_coins: number | null;
+  duo_games: number | null;
 
   wins_imposter_ranked: number | null;
   wins_crew_ranked: number | null;
@@ -49,6 +51,7 @@ type RoundRow = {
   word: string | null;
 
   imposter_discord_id: string | null;
+  imposter_team_index: number | null;
   imposter_name: string | null;
   winner: string;
   win_method: string;
@@ -66,6 +69,7 @@ type MatchPlayerRow = {
   placement: number;
   total_points: number;
   elo_delta: number;
+  duo_coins_delta?: number;
 };
 
 // raw from supabase: categories join can arrive as array
@@ -76,6 +80,7 @@ type RoundRowRaw = {
   winner: any;
   win_method: any;
   imposter_discord_id: any;
+  imposter_team_index: any;
   points_imposter: any;
   points_unschuldig: any;
   aborted: any;
@@ -121,6 +126,16 @@ function winMethodLabel(method: string) {
   return map[method] ?? method;
 }
 
+function formatCategoryName(name: string | null) {
+  if (!name) return "—";
+  
+  // Ersetze Unterstriche durch " & " und kapitalisiere Wörter
+  return name
+    .split('_')
+    .map(word => word.charAt(0).toUpperCase() + word.slice(1))
+    .join(' & ');
+}
+
 /* ===================== RANK SYSTEM ===================== */
 
 const RANKS = [
@@ -157,14 +172,172 @@ function getRankInfo(eloRaw: number | null | undefined, gamesRankedRaw: number |
 
   // Unranked: <6 ranked games => unranked badge + keine Elo-Ziffern
   if (gamesRanked < 6) {
-    return { label: "Unranked", badge: "/badges/unranked.png", value: null as null };
+    return { label: "Unranked", badge: "/badges/unranked.png", value: null as null, tier: "unranked" as const };
   }
 
   let best = RANKS[0];
   for (const r of RANKS) if (elo >= r.min) best = r;
 
   const value = (best as any).master ? Math.max(0, elo - 2100) : ((elo % 100) + 100) % 100;
-  return { label: best.label, badge: (best as any).badge, value };
+  
+  // Bestimme Tier basierend auf Elo
+  let tier: "unranked" | "eisen" | "bronze" | "silver" | "gold" | "platin" | "diamant" | "master" = "unranked";
+  if (elo >= 2100) tier = "master";
+  else if (elo >= 1800) tier = "diamant";
+  else if (elo >= 1500) tier = "platin";
+  else if (elo >= 1200) tier = "gold";
+  else if (elo >= 900) tier = "silver";
+  else if (elo >= 600) tier = "bronze";
+  else if (elo >= 300) tier = "eisen";
+  
+  return { label: best.label, badge: (best as any).badge, value, tier };
+}
+
+function getHeaderEffects(tier: "unranked" | "eisen" | "bronze" | "silver" | "gold" | "platin" | "diamant" | "master") {
+  switch (tier) {
+    case "unranked":
+      return {
+        className: "border-zinc-800 bg-zinc-900/40",
+        style: {},
+      };
+    case "eisen":
+      return {
+        className: "border-gray-600/30 bg-gradient-to-br from-black via-gray-700/30 to-black shadow-lg shadow-gray-700/20 animate-subtle-pulse",
+        style: {},
+      };
+    case "bronze":
+      return {
+        className: "border-amber-700/30 bg-gradient-to-br from-black via-amber-900/30 to-black shadow-lg shadow-amber-800/20 animate-subtle-pulse",
+        style: {},
+      };
+    case "silver":
+      return {
+        className: "border-gray-400/30 bg-gradient-to-br from-black via-gray-700/30 to-black shadow-lg shadow-gray-600/20 animate-subtle-pulse",
+        style: {},
+      };
+    case "gold":
+      return {
+        className: "border-yellow-500/30 bg-gradient-to-br from-black via-yellow-700/30 to-black animate-subtle-pulse animate-gold-glow",
+        style: {},
+      };
+    case "platin":
+      return {
+        className: "border-gray-300/40 shadow-lg animate-platin-flow animate-platin-rainbow-glow",
+        style: {
+          backgroundImage: 'linear-gradient(135deg, #f3f4f6, #e5e7eb, #d1d5db, #9ca3af, #6b7280, #9ca3af, #d1d5db, #e5e7eb, #f3f4f6)',
+        },
+      };
+    case "diamant":
+      return {
+        className: "border-cyan-400/60 shadow-lg animate-diamant-flow animate-diamant-rainbow-glow",
+        style: {
+          backgroundImage: 'linear-gradient(135deg, #e0f2fe, #a5f3fc, #67e8f9, #22d3ee, #06b6d4, #0891b2, #22d3ee, #67e8f9, #a5f3fc, #e0f2fe)',
+        },
+      };
+    case "master":
+      return {
+        className: "border-purple-400/40 bg-gradient-to-br from-black via-purple-700/40 to-black shadow-lg animate-rainbow-glow",
+        style: {},
+      };
+  }
+}
+
+function getBadgeEffects(tier: "unranked" | "eisen" | "bronze" | "silver" | "gold" | "platin" | "diamant" | "master") {
+  switch (tier) {
+    case "unranked":
+      return {
+        className: "",
+        style: {},
+      };
+    case "eisen":
+      return {
+        className: "",
+        style: {
+          filter: "drop-shadow(0 0 4px rgba(120, 120, 120, 0.4))",
+        },
+      };
+    case "bronze":
+      return {
+        className: "",
+        style: {
+          filter: "drop-shadow(0 0 4px rgba(180, 83, 9, 0.4))",
+        },
+      };
+    case "silver":
+      return {
+        className: "",
+        style: {
+          filter: "drop-shadow(0 0 4px rgba(192, 192, 192, 0.4))",
+        },
+      };
+    case "gold":
+      return {
+        className: "animate-subtle-pulse",
+        style: {
+          filter: "drop-shadow(0 0 6px rgba(255, 215, 0, 0.5))",
+        },
+      };
+    case "platin":
+      return {
+        className: "animate-subtle-pulse",
+        style: {
+          filter: "drop-shadow(0 0 8px rgba(0, 255, 255, 0.6))",
+        },
+      };
+    case "diamant":
+      return {
+        className: "animate-subtle-pulse",
+        style: {
+          filter: "drop-shadow(0 0 10px rgba(0, 191, 255, 0.7))",
+        },
+      };
+    case "master":
+      return {
+        className: "animate-rainbow-glow",
+        style: {},
+      };
+  }
+}
+
+function PlacementPill({ p }: { p: number }) {
+  const cls =
+    p === 1
+      ? "text-yellow-50 border-yellow-400/60 shadow-lg shadow-yellow-500/30"
+      : p === 2
+      ? "text-gray-50 border-gray-300/60 shadow-md shadow-gray-400/20"
+      : p === 3
+      ? "text-amber-50 border-amber-600/60 shadow-md shadow-amber-700/20"
+      : "bg-gradient-to-br from-red-800 via-red-900 to-red-950 text-red-50 border-red-700/50";
+
+  const metalStyle = 
+    p === 1 ? {
+      backgroundImage: 'linear-gradient(135deg, #fbbf24, #f59e0b, #fef3c7, #f59e0b, #fbbf24)',
+      textShadow: '0 0 2px rgba(0,0,0,0.8), 0 0 4px rgba(0,0,0,0.6)',
+    } : p === 2 ? {
+      backgroundImage: 'linear-gradient(135deg, #d1d5db, #9ca3af, #f3f4f6, #9ca3af, #d1d5db)',
+      textShadow: '0 0 2px rgba(0,0,0,0.8), 0 0 4px rgba(0,0,0,0.6)',
+    } : p === 3 ? {
+      backgroundImage: 'linear-gradient(135deg, #b45309, #d97706, #ca8a04, #d97706, #b45309)',
+      textShadow: '0 0 2px rgba(0,0,0,0.8), 0 0 4px rgba(0,0,0,0.6)',
+    } : {
+      textShadow: '0 0 2px rgba(0,0,0,0.8), 0 0 4px rgba(0,0,0,0.6)',
+    };
+
+  return (
+    <span
+      className={[
+        "inline-flex items-center justify-center rounded-md border font-semibold",
+        "h-8 w-8 text-xs transition-all duration-300 hover:scale-110",
+        p === 1 ? "animate-subtle-pulse animate-gold-flow" : 
+        p === 2 ? "animate-silver-flow" :
+        p === 3 ? "animate-bronze-flow" : "",
+        cls,
+      ].join(" ")}
+      style={metalStyle}
+    >
+      {p}.
+    </span>
+  );
 }
 
 /* ===================== COMPONENT ===================== */
@@ -173,6 +346,8 @@ export default function PlayerClient({ discordId }: { discordId: string }) {
   const [player, setPlayer] = useState<PlayerRow | null>(null);
   const [recent, setRecent] = useState<RecentMatchRow[]>([]);
   const [casualFirsts, setCasualFirsts] = useState(0);
+  const [casualFullGameFirsts, setCasualFullGameFirsts] = useState(0);
+  const [duoAvgPlacement, setDuoAvgPlacement] = useState<number | null>(null);
 
   // role stats über match_rounds (round_no=1) für ranked matches
   const [rankedRoleStats, setRankedRoleStats] = useState({
@@ -194,6 +369,16 @@ export default function PlayerClient({ discordId }: { discordId: string }) {
   const rank = useMemo(
     () => getRankInfo(player?.elo_ranked, player?.games_ranked),
     [player]
+  );
+
+  const badgeEffects = useMemo(
+    () => getBadgeEffects(rank.tier),
+    [rank.tier]
+  );
+
+  const headerEffects = useMemo(
+    () => getHeaderEffects(rank.tier),
+    [rank.tier]
   );
 
   const rankedOverview = useMemo(() => {
@@ -244,7 +429,7 @@ export default function PlayerClient({ discordId }: { discordId: string }) {
         return;
       }
 
-      // 2) letzte 20 matches
+      // 2) letzte 20 matches (ranked + zwanglos aus match_results)
       const m = await supabase
         .from("match_results")
         .select("match_id,total_points,placement,elo_delta,matches!inner(id,started_at,ended_at,mode)")
@@ -260,16 +445,138 @@ export default function PlayerClient({ discordId }: { discordId: string }) {
         return;
       }
 
-      // DEBUG: Log the data structure
-      console.log("Match results data:", m.data?.[0]);
+      // 2b) Duo matches - Alternative: Lade separat
+      console.log("Loading duo matches for player ID:", id, "Type:", typeof id);
+      
+      // Erst alle Duo-Matches laden
+      const allDuoMatchesSimple = await supabase
+        .from("matches")
+        .select("id,started_at,ended_at,mode")
+        .eq("mode", "duo")
+        .order("started_at", { ascending: false })
+        .limit(100);
 
-      // Sortiere nach Datum (neueste zuerst) - falls Supabase-Sortierung nicht funktioniert
-      const sortedMatches = (m.data ?? []).sort((a: any, b: any) => {
-        const dateA = Array.isArray(a.matches) ? a.matches[0]?.started_at : a.matches?.started_at;
-        const dateB = Array.isArray(b.matches) ? b.matches[0]?.started_at : b.matches?.started_at;
+      console.log("All duo matches (simple):", allDuoMatchesSimple);
+
+      let duoMatchesWithInfo: any[] = [];
+      
+      if (allDuoMatchesSimple.data && allDuoMatchesSimple.data.length > 0) {
+        const matchIds = allDuoMatchesSimple.data.map(m => m.id);
+        
+        console.log("Match IDs to query:", matchIds, "Types:", matchIds.map(id => typeof id));
+        
+        // Versuche alle Teams zu laden (ohne Filter) um zu sehen welche Spalten existieren
+        const allTeamsQueryTest = await supabase
+          .from("duo_teams")
+          .select("*")
+          .limit(10);
+
+        console.log("All teams test query (all columns):", allTeamsQueryTest);
+        console.log("Sample team data:", allTeamsQueryTest.data?.[0]);
+        console.log("All column names:", allTeamsQueryTest.data?.[0] ? Object.keys(allTeamsQueryTest.data[0]) : []);
+        
+        // Dann alle Teams für diese Matches laden - mit allen Spalten
+        const allTeamsQuery = await supabase
+          .from("duo_teams")
+          .select("*")
+          .filter("match_id", "in", `(${matchIds.join(",")})`);
+
+        console.log("All teams query:", allTeamsQuery);
+        console.log("All teams error:", allTeamsQuery.error);
+
+        if (allTeamsQuery.data) {
+          // Gruppiere Teams nach Match
+          const teamsByMatch: Record<number, any[]> = {};
+          for (const team of allTeamsQuery.data) {
+            const mid = team.match_id;
+            if (!teamsByMatch[mid]) teamsByMatch[mid] = [];
+            teamsByMatch[mid].push(team);
+          }
+
+          console.log("Teams by match:", teamsByMatch);
+
+          // Filtere Matches wo Spieler dabei war
+          for (const match of allDuoMatchesSimple.data) {
+            const teams = teamsByMatch[match.id] ?? [];
+            
+            const playerTeam = teams.find((t: any) => {
+              const captainId = String(t.captain_discord_id);
+              const memberId = String(t.member_discord_id);
+              return captainId === id || memberId === id;
+            });
+
+            if (playerTeam) {
+              duoMatchesWithInfo.push({
+                match_id: match.id,
+                team_index: playerTeam.team_index,
+                score: playerTeam.score,
+                coins_earned: playerTeam.coins_earned ?? 0,
+                captain_discord_id: playerTeam.captain_discord_id,
+                member_discord_id: playerTeam.member_discord_id,
+                matches: {
+                  id: match.id,
+                  started_at: match.started_at,
+                  ended_at: match.ended_at,
+                  mode: match.mode,
+                },
+                allTeams: teams,
+              });
+            }
+          }
+        }
+      }
+
+      console.log("Duo matches for player:", duoMatchesWithInfo);
+      console.log("Number of duo matches for player:", duoMatchesWithInfo.length);
+
+      // Kombiniere beide Listen
+      const allMatches: any[] = [];
+
+      // Füge match_results hinzu
+      for (const row of m.data ?? []) {
+        const meta = Array.isArray(row.matches) ? row.matches[0] : row.matches;
+        allMatches.push({
+          match_id: row.match_id,
+          total_points: row.total_points,
+          placement: row.placement,
+          elo_delta: row.elo_delta,
+          matches: meta,
+          isDuo: false,
+        });
+      }
+
+      // Füge duo_teams hinzu
+      if (duoMatchesWithInfo.length > 0) {
+        for (const row of duoMatchesWithInfo) {
+          const meta = row.matches;
+          if (!meta) continue;
+          
+          // Berechne Platzierung aus allen Teams
+          const allTeams = row.allTeams ?? [];
+          const sortedTeams = [...allTeams].sort((a: any, b: any) => b.score - a.score);
+          const placement = sortedTeams.findIndex((t: any) => t.team_index === row.team_index) + 1;
+
+          allMatches.push({
+            match_id: row.match_id,
+            total_points: row.score,
+            placement: placement,
+            elo_delta: null,
+            duo_coins_delta: row.coins_earned ?? 0,
+            matches: meta,
+            isDuo: true,
+          });
+        }
+      }
+
+      // Sortiere nach Datum (neueste zuerst)
+      const sortedMatches = allMatches.sort((a: any, b: any) => {
+        const dateA = a.matches?.started_at;
+        const dateB = b.matches?.started_at;
         if (!dateA || !dateB) return 0;
         return new Date(dateB).getTime() - new Date(dateA).getTime();
-      });
+      }).slice(0, 20); // Nur die neuesten 20
+
+      console.log("Combined matches:", sortedMatches);
 
       // 3) Zwanglos 1.-Plätze zählen (count-only)
       const cf = await supabase
@@ -281,12 +588,85 @@ export default function PlayerClient({ discordId }: { discordId: string }) {
 
       const casualFirstCount = cf.count ?? 0;
 
-      // 4) ranked role stats via round_no=1 (distinct pro match)
+      // 3b) Zwanglos 1.-Plätze in VOLLEN Spielen (4 Spieler)
+      // Hole alle Zwanglos-Matches wo Spieler 1. war
+      const cfFull = await supabase
+        .from("match_results")
+        .select("match_id,matches!inner(id,mode)")
+        .eq("discord_id", id)
+        .eq("placement", 1)
+        .eq("matches.mode", "zwanglos");
+
+      let casualFullGameFirstCount = 0;
+      if (cfFull.data && cfFull.data.length > 0) {
+        const casualFirstMatchIds = cfFull.data.map((x: any) => {
+          return Array.isArray(x.matches) ? x.matches[0]?.id : x.matches?.id;
+        }).filter(Boolean);
+
+        // Zähle Spieler pro Match
+        if (casualFirstMatchIds.length > 0) {
+          const { data: matchCounts } = await supabase
+            .from("match_results")
+            .select("match_id")
+            .in("match_id", casualFirstMatchIds);
+
+          const countByMatch: Record<number, number> = {};
+          for (const row of matchCounts ?? []) {
+            const mid = row.match_id;
+            countByMatch[mid] = (countByMatch[mid] || 0) + 1;
+          }
+
+          // Zähle nur Matches mit 4 Spielern
+          casualFullGameFirstCount = Object.values(countByMatch).filter(c => c === 4).length;
+        }
+      }
+
+      // 4) Duo durchschnittliche Platzierung
+      // Hole alle Duo-Matches für diesen Spieler
+      const duoMatches = await supabase
+        .from("matches")
+        .select("id,started_at,duo_teams(team_index,captain_discord_id,member_discord_id,score)")
+        .eq("mode", "duo")
+        .order("started_at", { ascending: false })
+        .limit(500);
+
+      let duoAvg: number | null = null;
+      if (duoMatches.data && duoMatches.data.length > 0) {
+        const placements: number[] = [];
+        
+        for (const match of duoMatches.data) {
+          const teams = (match as any).duo_teams ?? [];
+          if (teams.length === 0) continue;
+          
+          // Sortiere Teams nach Score (höchster = Platz 1)
+          const sortedTeams = [...teams].sort((a: any, b: any) => b.score - a.score);
+          
+          // Finde Platzierung des Spielers
+          sortedTeams.forEach((team: any, idx: number) => {
+            const captain = String(team.captain_discord_id);
+            const member = String(team.member_discord_id);
+            
+            if (captain === id || member === id) {
+              placements.push(idx + 1);
+            }
+          });
+        }
+        
+        if (placements.length > 0) {
+          duoAvg = placements.reduce((a, b) => a + b, 0) / placements.length;
+        }
+      }
+
+      console.log("Duo placements:", duoAvg);
+
+      // 5) ranked role stats via round_no=1 (distinct pro match)
       const rankedParts = await supabase
         .from("match_results")
         .select("match_id,matches!inner(mode)")
         .eq("discord_id", id)
         .eq("matches.mode", "ranked");
+
+      console.log("Ranked matches for player:", rankedParts);
 
       let impGames = 0,
         impWins = 0,
@@ -296,16 +676,23 @@ export default function PlayerClient({ discordId }: { discordId: string }) {
       if (!rankedParts.error && rankedParts.data && rankedParts.data.length > 0) {
         const rankedMatchIds = rankedParts.data.map((x: any) => x.match_id);
 
+        console.log("Ranked match IDs:", rankedMatchIds);
+
         const r1 = await supabase
           .from("match_rounds")
           .select("match_id,imposter_discord_id,winner")
           .in("match_id", rankedMatchIds)
           .eq("round_no", 1);
 
+        console.log("Round data for player:", id, r1.data);
+        console.log("Sample round:", r1.data?.[0]);
+
         if (!r1.error && r1.data) {
           for (const row of r1.data as any[]) {
-            const impId = row.imposter_discord_id as string | null;
+            const impId = String(row.imposter_discord_id ?? "");
             const winner = String(row.winner ?? "");
+
+            console.log(`Round: imposter=${impId}, winner=${winner}, player=${id}, isImposter=${impId === id}`);
 
             const isImposter = impId === id;
             if (isImposter) {
@@ -319,10 +706,14 @@ export default function PlayerClient({ discordId }: { discordId: string }) {
         }
       }
 
+      console.log("Ranked role stats:", { impGames, impWins, crewGames, crewWins });
+
       if (!cancelled) {
         setPlayer(p.data as PlayerRow);
         setRecent(sortedMatches as RecentMatchRow[]);
         setCasualFirsts(casualFirstCount);
+        setCasualFullGameFirsts(casualFullGameFirstCount);
+        setDuoAvgPlacement(duoAvg);
         setRankedRoleStats({ impGames, impWins, crewGames, crewWins });
         setLoading(false);
       }
@@ -347,14 +738,32 @@ export default function PlayerClient({ discordId }: { discordId: string }) {
 
     setRoundsLoading((s) => ({ ...s, [matchId]: true }));
 
-    // Lade Runden
+    // Bestimme Match-Modus zuerst
+    const matchMeta = recent.find(r => r.match_id === matchId);
+    const meta = Array.isArray((matchMeta as any)?.matches) ? (matchMeta as any).matches[0] : (matchMeta as any)?.matches;
+    console.log("Match mode for", matchId, ":", meta?.mode);
+
+    // Test: Lade erst mit allen Spalten
+    const rTest = await supabase
+      .from("match_rounds")
+      .select("*")
+      .eq("match_id", matchId)
+      .limit(1);
+
+    console.log("Rounds test query (all columns):", rTest);
+    console.log("Sample round data:", rTest.data?.[0]);
+    console.log("Round column names:", rTest.data?.[0] ? Object.keys(rTest.data[0]) : []);
+
+    // Lade Runden - mit allen Spalten, da imposter_team_index nicht existiert
     const r = await supabase
       .from("match_rounds")
-      .select(
-        "id,round_no,word,winner,win_method,imposter_discord_id,points_imposter,points_unschuldig,aborted,aborted_reason,categories(name)"
-      )
+      .select("*")
       .eq("match_id", matchId)
       .order("round_no", { ascending: true });
+
+    console.log("Rounds query for match", matchId, ":", r);
+    console.log("Rounds error:", r.error);
+    console.log("Rounds data:", r.data);
 
     // Lade alle Spieler für dieses Match
     const mp = await supabase
@@ -363,10 +772,37 @@ export default function PlayerClient({ discordId }: { discordId: string }) {
       .eq("match_id", matchId)
       .order("placement", { ascending: true });
 
-    if (!r.error) {
-      const raw = (r.data ?? []) as unknown as RoundRowRaw[];
+    console.log("Match players query for match", matchId, ":", mp);
+    console.log("Match players error:", mp.error);
+    console.log("Match players data:", mp.data);
 
-      // Hole Spielernamen für alle Imposter in diesem Match
+    if (!r.error) {
+      const raw = (r.data ?? []) as unknown as any[];
+
+      console.log("Processing rounds, sample:", raw[0]);
+
+      // Für Duo-Matches: Lade Teams um zu wissen welcher Spieler zu welchem Team gehört
+      let teamMapping: Map<string, number> = new Map(); // discord_id -> team_index
+      
+      if (meta?.mode === "duo") {
+        const { data: teamsData } = await supabase
+          .from("duo_teams")
+          .select("team_index,captain_discord_id,member_discord_id")
+          .eq("match_id", matchId);
+
+        console.log("Teams for match:", teamsData);
+
+        if (teamsData) {
+          for (const team of teamsData) {
+            teamMapping.set(String(team.captain_discord_id), team.team_index);
+            teamMapping.set(String(team.member_discord_id), team.team_index);
+          }
+        }
+
+        console.log("Team mapping:", teamMapping);
+      }
+
+      // Hole Spielernamen für alle Imposter in diesem Match (nur für Nicht-Duo)
       const imposterIds = [...new Set(raw.map(x => x.imposter_discord_id).filter(Boolean))];
       const { data: playersData } = await supabase
         .from("players")
@@ -378,24 +814,43 @@ export default function PlayerClient({ discordId }: { discordId: string }) {
         playerNames.set(p.discord_id, p.last_name ?? p.discord_id);
       });
 
-      const normalized: RoundRow[] = raw.map((x) => ({
-        id: Number(x.id),
-        round_no: Number(x.round_no),
-        word: x.word ?? null,
-        winner: String(x.winner ?? ""),
-        win_method: String(x.win_method ?? ""),
-        imposter_discord_id: x.imposter_discord_id ?? null,
-        imposter_name: x.imposter_discord_id ? playerNames.get(x.imposter_discord_id) ?? x.imposter_discord_id : null,
-        points_imposter: Number(x.points_imposter ?? 0),
-        points_unschuldig: Number(x.points_unschuldig ?? 0),
-        aborted: Boolean(x.aborted),
-        aborted_reason: x.aborted_reason ?? null,
-        // categories kann Object oder Array sein
-        categoryName: Array.isArray(x.categories) 
-          ? x.categories[0]?.name ?? null 
-          : (x.categories as any)?.name ?? null,
-      }));
+      // Hole Kategorie-Namen separat
+      const categoryIds = [...new Set(raw.map(x => x.category_id).filter(Boolean))];
+      const { data: categoriesData } = await supabase
+        .from("categories")
+        .select("id,name")
+        .in("id", categoryIds);
 
+      const categoryNames = new Map<number, string>();
+      (categoriesData ?? []).forEach((c: any) => {
+        categoryNames.set(c.id, c.name);
+      });
+
+      const normalized: RoundRow[] = raw.map((x) => {
+        // Für Duo: Bestimme Team-Index aus imposter_discord_id
+        let imposterTeamIndex = null;
+        if (meta?.mode === "duo" && x.imposter_discord_id) {
+          imposterTeamIndex = teamMapping.get(String(x.imposter_discord_id)) ?? null;
+        }
+
+        return {
+          id: Number(x.id),
+          round_no: Number(x.round_no),
+          word: x.word ?? null,
+          winner: String(x.winner ?? ""),
+          win_method: String(x.win_method ?? ""),
+          imposter_discord_id: x.imposter_discord_id ?? null,
+          imposter_team_index: imposterTeamIndex,
+          imposter_name: x.imposter_discord_id ? playerNames.get(x.imposter_discord_id) ?? x.imposter_discord_id : null,
+          points_imposter: Number(x.points_imposter ?? 0),
+          points_unschuldig: Number(x.points_unschuldig ?? 0),
+          aborted: Boolean(x.aborted),
+          aborted_reason: x.aborted_reason ?? null,
+          categoryName: x.category_id ? categoryNames.get(x.category_id) ?? null : null,
+        };
+      });
+
+      console.log("Normalized rounds:", normalized);
       setRoundsByMatch((prev) => ({ ...prev, [matchId]: normalized }));
     }
 
@@ -423,6 +878,55 @@ export default function PlayerClient({ discordId }: { discordId: string }) {
       setPlayersByMatch((prev) => ({ ...prev, [matchId]: matchPlayers }));
     }
 
+    // Falls es ein Duo-Match ist, lade auch die Duo-Teams (meta wurde oben definiert)
+    if (meta?.mode === "duo") {
+      const duoTeams = await supabase
+        .from("duo_teams")
+        .select("captain_discord_id,member_discord_id,score,coins_earned")
+        .eq("match_id", matchId)
+        .order("score", { ascending: false });
+
+      if (!duoTeams.error && duoTeams.data) {
+        // Hole Namen für alle Spieler
+        const allDuoPlayerIds = duoTeams.data.flatMap((t: any) => [t.captain_discord_id, t.member_discord_id]);
+        const { data: duoPlayersData } = await supabase
+          .from("players")
+          .select("discord_id,last_name")
+          .in("discord_id", allDuoPlayerIds);
+
+        const duoPlayerNames = new Map<string, string>();
+        (duoPlayersData ?? []).forEach((p: any) => {
+          duoPlayerNames.set(p.discord_id, p.last_name ?? p.discord_id);
+        });
+
+        const duoMatchPlayers: MatchPlayerRow[] = [];
+        duoTeams.data.forEach((team: any, idx: number) => {
+          const placement = idx + 1;
+          const coinsEarned = Number(team.coins_earned ?? 0);
+          
+          duoMatchPlayers.push({
+            discord_id: team.captain_discord_id,
+            player_name: duoPlayerNames.get(team.captain_discord_id) ?? team.captain_discord_id,
+            placement: placement,
+            total_points: Number(team.score ?? 0),
+            elo_delta: 0,
+            duo_coins_delta: coinsEarned,
+          });
+          
+          duoMatchPlayers.push({
+            discord_id: team.member_discord_id,
+            player_name: duoPlayerNames.get(team.member_discord_id) ?? team.member_discord_id,
+            placement: placement,
+            total_points: Number(team.score ?? 0),
+            elo_delta: 0,
+            duo_coins_delta: coinsEarned,
+          });
+        });
+
+        setPlayersByMatch((prev) => ({ ...prev, [matchId]: duoMatchPlayers }));
+      }
+    }
+
     setRoundsLoading((s) => ({ ...s, [matchId]: false }));
   }
 
@@ -447,29 +951,78 @@ export default function PlayerClient({ discordId }: { discordId: string }) {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="rounded-2xl border border-zinc-800 bg-zinc-900/40 p-6">
+      <div className={`rounded-2xl p-6 ${headerEffects.className}`} style={headerEffects.style}>
         <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
           <div className="min-w-0">
             <div className="text-xs text-zinc-400">Spieler</div>
-            <div className="truncate text-2xl font-semibold text-zinc-100">
+            <div className="truncate text-2xl font-semibold text-zinc-100" style={{ textShadow: '0 0 3px black, 0 0 5px black, 1px 1px 2px black' }}>
               {player.last_name ?? "Unbenannt"}
             </div>
             <div className="mt-1 font-mono text-xs text-zinc-500">{player.discord_id}</div>
           </div>
 
-          <div className="flex items-center gap-4 rounded-2xl border border-zinc-800 bg-zinc-950/40 px-4 py-3">
-            <img src={rank.badge} alt={rank.label} className="h-28 w-auto object-contain" />
-            <div>
-              <div className="text-xs text-zinc-400">Rank</div>
-              <div className="text-xl font-semibold text-zinc-100">
-                {rank.label}
-                {rank.value !== null && <span className="ml-2">{rank.value}</span>}
-              </div>
-              {!qualified && (
-                <div className="mt-1 text-xs text-zinc-500">
-                  Noch {Math.max(0, 6 - clamp(player.games_ranked))} Ranked-Spiele bis sichtbar
+          <div className="flex items-center gap-4">
+            {/* Duo Coins */}
+            <div className="flex items-center gap-4 rounded-2xl border border-orange-500/30 bg-gradient-to-br from-black via-orange-900/40 to-black shadow-lg shadow-orange-700/30 px-4 py-3">
+              <div>
+                <div className="text-xs text-zinc-400">Duo Coins</div>
+                <div 
+                  className="text-2xl font-bold animate-subtle-pulse animate-gold-flow"
+                  style={{
+                    fontFamily: '"Segoe UI", "Roboto", "Helvetica Neue", Arial, sans-serif',
+                    backgroundImage: 'linear-gradient(135deg, #fbbf24, #f59e0b, #fef3c7, #f59e0b, #fbbf24)',
+                    backgroundClip: 'text',
+                    WebkitBackgroundClip: 'text',
+                    WebkitTextFillColor: 'transparent',
+                    letterSpacing: '0.02em',
+                    filter: 'drop-shadow(0 0 3px rgba(0,0,0,0.9)) drop-shadow(0 0 6px rgba(0,0,0,0.7))',
+                  }}
+                >
+                  {clamp(player.duo_coins)}
                 </div>
-              )}
+              </div>
+              <img src="/badges/Duocoin.png" alt="Duo Coin" className="h-16 w-auto object-contain" />
+            </div>
+
+            {/* Ranked */}
+            <div className="flex items-center gap-4 rounded-2xl border border-zinc-800 bg-zinc-950/40 px-4 py-3">
+              <div 
+                className={`relative ${badgeEffects.className}`}
+                style={badgeEffects.style}
+              >
+                <img src={rank.badge} alt={rank.label} className="h-28 w-auto object-contain" />
+                {(rank.tier === "gold" || rank.tier === "platin" || rank.tier === "diamant" || rank.tier === "master") && (
+                  <div 
+                    className="absolute inset-0 pointer-events-none rounded-full"
+                    style={{
+                      background: 'linear-gradient(90deg, transparent 0%, rgba(255, 255, 255, 0.5) 50%, transparent 100%)',
+                      backgroundSize: '200% 100%',
+                      animation: 'light-reflection 10s ease-in-out infinite',
+                      mixBlendMode: 'overlay',
+                      maskImage: `url(${rank.badge})`,
+                      WebkitMaskImage: `url(${rank.badge})`,
+                      maskSize: 'contain',
+                      WebkitMaskSize: 'contain',
+                      maskRepeat: 'no-repeat',
+                      WebkitMaskRepeat: 'no-repeat',
+                      maskPosition: 'center',
+                      WebkitMaskPosition: 'center',
+                    }}
+                  />
+                )}
+              </div>
+              <div>
+                <div className="text-xs text-zinc-400">Rank</div>
+                <div className="text-xl font-semibold text-zinc-100">
+                  {rank.label}
+                  {rank.value !== null && <span className="ml-2">{rank.value}</span>}
+                </div>
+                {!qualified && (
+                  <div className="mt-1 text-xs text-zinc-500">
+                    Noch {Math.max(0, 6 - clamp(player.games_ranked))} Ranked-Spiele bis sichtbar
+                  </div>
+                )}
+              </div>
             </div>
           </div>
         </div>
@@ -477,6 +1030,54 @@ export default function PlayerClient({ discordId }: { discordId: string }) {
 
       {/* Stats */}
       <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+        {/* Zwanglos Box */}
+        <div className="rounded-xl border border-white/20 bg-gradient-to-br from-black via-gray-800/30 to-black shadow-lg shadow-white/10 p-6">
+          <div className="text-sm font-semibold text-white/85">Zwanglos</div>
+          <div className="mt-2 text-sm text-zinc-300">
+            Spiele:{" "}
+            <span className="font-semibold text-zinc-100">{clamp(player.games_casual)}</span>
+          </div>
+          <div className="mt-1 text-sm text-zinc-300">
+            1. Plätze (volle Spiele):{" "}
+            <span className="font-semibold text-zinc-100">{casualFullGameFirsts}</span>
+          </div>
+        </div>
+
+        {/* Ranked Box */}
+        <div className="rounded-xl border border-blue-500/30 bg-gradient-to-br from-black via-blue-900/40 to-black shadow-lg shadow-blue-700/30 p-6">
+          <div className="text-sm font-semibold text-white/85">Ranked</div>
+          <div className="mt-2 text-sm text-zinc-300">
+            Spiele:{" "}
+            <span className="font-semibold text-zinc-100">{rankedOverview.gr}</span>
+          </div>
+          <div className="mt-1 text-sm text-zinc-300">
+            Imposter Winrate:{" "}
+            <span className="font-semibold text-zinc-100">{pct(rankedRoleWinrates.impWR)}</span>
+          </div>
+          <div className="mt-1 text-sm text-zinc-300">
+            Unschuldig Winrate:{" "}
+            <span className="font-semibold text-zinc-100">{pct(rankedRoleWinrates.crewWR)}</span>
+          </div>
+        </div>
+
+        {/* Duo Box */}
+        <div className="rounded-xl border border-orange-500/30 bg-gradient-to-br from-black via-orange-900/40 to-black shadow-lg shadow-orange-700/30 p-6">
+          <div className="text-sm font-semibold text-white/85">Duo</div>
+          <div className="mt-2 text-sm text-zinc-300">
+            Spiele:{" "}
+            <span className="font-semibold text-zinc-100">{clamp(player.duo_games)}</span>
+          </div>
+          <div className="mt-1 text-sm text-zinc-300">
+            Ø Platzierung:{" "}
+            <span className="font-semibold text-zinc-100">
+              {duoAvgPlacement !== null ? duoAvgPlacement.toFixed(2) : "—"}
+            </span>
+          </div>
+        </div>
+      </div>
+
+      {/* Old Stats - kann entfernt werden */}
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-3" style={{ display: 'none' }}>
         <div className="rounded-2xl border border-zinc-800 bg-zinc-900/40 p-6">
           <div className="text-sm font-semibold text-zinc-100">Ranked</div>
           <div className="mt-2 text-sm text-zinc-300">
@@ -514,8 +1115,8 @@ export default function PlayerClient({ discordId }: { discordId: string }) {
         </div>
       </div>
 
-      {/* Casual */}
-      <div className="rounded-2xl border border-zinc-800 bg-zinc-900/40 p-6">
+      {/* Casual - kann entfernt werden */}
+      <div className="rounded-2xl border border-zinc-800 bg-zinc-900/40 p-6" style={{ display: 'none' }}>
         <div className="text-sm font-semibold text-zinc-100">Zwanglos</div>
         <div className="mt-2 text-sm text-zinc-300">
           Spiele:{" "}
@@ -542,7 +1143,7 @@ export default function PlayerClient({ discordId }: { discordId: string }) {
                 <th className="py-2">Modus</th>
                 <th className="py-2">Platz</th>
                 <th className="py-2">Punkte</th>
-                <th className="py-2">Elo Δ</th>
+                <th className="py-2">Elo/Coins</th>
                 <th className="py-2">Details</th>
               </tr>
             </thead>
@@ -556,11 +1157,47 @@ export default function PlayerClient({ discordId }: { discordId: string }) {
                 return (
                   <Fragment key={`match-${row.match_id}`}>
                     <tr className="border-t border-zinc-800">
-                      <td className="py-2">{fmtDateTime(meta?.started_at)}</td>
-                      <td className="py-2">{meta?.mode ?? "—"}</td>
-                      <td className="py-2">{row.placement ?? "—"}</td>
-                      <td className="py-2">{row.total_points ?? "—"}</td>
-                      <td className="py-2">{meta?.mode === "zwanglos" ? "—" : (row.elo_delta ?? 0)}</td>
+                      <td className="py-2">
+                        <span className="inline-block px-2 py-1 rounded text-xs font-semibold bg-gradient-to-r from-zinc-700/80 to-zinc-600/80 border border-zinc-400/40 text-zinc-100">
+                          {fmtDateTime(meta?.started_at)}
+                        </span>
+                      </td>
+                      <td className="py-2">
+                        <span className={
+                          meta?.mode === "ranked" 
+                            ? "inline-block px-2 py-1 rounded text-xs font-semibold bg-gradient-to-r from-blue-900/60 to-blue-800/60 border border-blue-500/30 text-blue-100"
+                            : meta?.mode === "duo"
+                            ? "inline-block px-2 py-1 rounded text-xs font-semibold bg-gradient-to-r from-orange-900/60 to-orange-800/60 border border-orange-500/30 text-orange-100"
+                            : "inline-block px-2 py-1 rounded text-xs font-semibold bg-gradient-to-r from-gray-800/60 to-gray-700/60 border border-gray-500/30 text-gray-100"
+                        }>
+                          {meta?.mode ?? "—"}
+                        </span>
+                      </td>
+                      <td className="py-2">
+                        {row.placement ? <PlacementPill p={row.placement} /> : "—"}
+                      </td>
+                      <td className="py-2">
+                        <span className="inline-block px-2 py-1 rounded text-xs font-semibold bg-gradient-to-r from-zinc-700/80 to-zinc-600/80 border border-zinc-400/40 text-zinc-100">
+                          {row.total_points ?? "—"}
+                        </span>
+                      </td>
+                      <td className="py-2">
+                        {meta?.mode === "zwanglos" ? (
+                          <span className="text-zinc-400">—</span>
+                        ) : meta?.mode === "duo" ? (
+                          <span className="inline-block px-2 py-1 rounded text-xs font-semibold bg-gradient-to-r from-orange-900/60 to-orange-800/60 border border-orange-500/30 text-orange-100">
+                            {row.duo_coins_delta ? `${row.duo_coins_delta >= 0 ? "+" : ""}${row.duo_coins_delta}` : "—"}
+                          </span>
+                        ) : (
+                          <span className={
+                            row.elo_delta && row.elo_delta >= 0
+                              ? "inline-block px-2 py-1 rounded text-xs font-semibold bg-gradient-to-r from-green-900/60 to-green-800/60 border border-green-500/30 text-green-100"
+                              : "inline-block px-2 py-1 rounded text-xs font-semibold bg-gradient-to-r from-red-900/60 to-red-800/60 border border-red-500/30 text-red-100"
+                          }>
+                            {row.elo_delta ? `${row.elo_delta >= 0 ? "+" : ""}${row.elo_delta}` : "—"}
+                          </span>
+                        )}
+                      </td>
                       <td className="py-2">
                         <button
                           className="rounded-lg border border-zinc-700 bg-zinc-950/30 px-2 py-1 text-xs hover:bg-zinc-950/60"
@@ -575,6 +1212,20 @@ export default function PlayerClient({ discordId }: { discordId: string }) {
                       <tr className="border-t border-zinc-800">
                         <td colSpan={6} className="py-3">
                           <div className="space-y-4">
+                            {/* Match Info Header */}
+                            <div className="flex items-center gap-3 px-4">
+                              <span className="text-sm text-zinc-400">Modus:</span>
+                              <span className={
+                                meta?.mode === "ranked" 
+                                  ? "inline-block px-3 py-1.5 rounded text-sm font-semibold bg-gradient-to-r from-blue-900/60 to-blue-800/60 border border-blue-500/30 text-blue-100"
+                                  : meta?.mode === "duo"
+                                  ? "inline-block px-3 py-1.5 rounded text-sm font-semibold bg-gradient-to-r from-orange-900/60 to-orange-800/60 border border-orange-500/30 text-orange-100"
+                                  : "inline-block px-3 py-1.5 rounded text-sm font-semibold bg-gradient-to-r from-gray-800/60 to-gray-700/60 border border-gray-500/30 text-gray-100"
+                              }>
+                                {meta?.mode ?? "—"}
+                              </span>
+                            </div>
+
                             {/* Runden-Tabelle */}
                             <div className="rounded-xl border border-zinc-800 bg-zinc-950/30 p-4">
                               <div className="mb-2 text-sm font-semibold text-zinc-100">Runden</div>
@@ -587,14 +1238,46 @@ export default function PlayerClient({ discordId }: { discordId: string }) {
                                   <table className="w-full text-sm">
                                     <thead className="text-xs text-zinc-400">
                                       <tr>
-                                        <th className="text-left py-2">Runde</th>
-                                        <th className="py-2">Imposter</th>
-                                        <th className="py-2">Gewinner</th>
-                                        <th className="py-2">Methode</th>
-                                        <th className="py-2">Kategorie</th>
-                                        <th className="py-2">Wort</th>
-                                        <th className="py-2">Punkte I</th>
-                                        <th className="py-2">Punkte U</th>
+                                        <th className="text-left py-2 px-2">
+                                          <span className="inline-block px-2 py-1 rounded text-xs font-semibold bg-gradient-to-r from-zinc-700/80 to-zinc-600/80 border border-zinc-400/40 text-zinc-100">
+                                            Runde
+                                          </span>
+                                        </th>
+                                        <th className="py-2 px-2">
+                                          <span className="inline-block px-2 py-1 rounded text-xs font-semibold bg-gradient-to-r from-zinc-700/80 to-zinc-600/80 border border-zinc-400/40 text-zinc-100">
+                                            Imposter
+                                          </span>
+                                        </th>
+                                        <th className="py-2 px-2">
+                                          <span className="inline-block px-2 py-1 rounded text-xs font-semibold bg-gradient-to-r from-zinc-700/80 to-zinc-600/80 border border-zinc-400/40 text-zinc-100">
+                                            Gewinner
+                                          </span>
+                                        </th>
+                                        <th className="py-2 px-2">
+                                          <span className="inline-block px-2 py-1 rounded text-xs font-semibold bg-gradient-to-r from-zinc-700/80 to-zinc-600/80 border border-zinc-400/40 text-zinc-100">
+                                            Methode
+                                          </span>
+                                        </th>
+                                        <th className="py-2 px-2">
+                                          <span className="inline-block px-2 py-1 rounded text-xs font-semibold bg-gradient-to-r from-zinc-700/80 to-zinc-600/80 border border-zinc-400/40 text-zinc-100">
+                                            Kategorie
+                                          </span>
+                                        </th>
+                                        <th className="py-2 px-2">
+                                          <span className="inline-block px-2 py-1 rounded text-xs font-semibold bg-gradient-to-r from-zinc-700/80 to-zinc-600/80 border border-zinc-400/40 text-zinc-100">
+                                            Wort
+                                          </span>
+                                        </th>
+                                        <th className="py-2 px-2">
+                                          <span className="inline-block px-2 py-1 rounded text-xs font-semibold bg-gradient-to-r from-zinc-700/80 to-zinc-600/80 border border-zinc-400/40 text-zinc-100">
+                                            Punkte I
+                                          </span>
+                                        </th>
+                                        <th className="py-2 px-2">
+                                          <span className="inline-block px-2 py-1 rounded text-xs font-semibold bg-gradient-to-r from-zinc-700/80 to-zinc-600/80 border border-zinc-400/40 text-zinc-100">
+                                            Punkte U
+                                          </span>
+                                        </th>
                                       </tr>
                                     </thead>
                                     <tbody>
@@ -603,16 +1286,53 @@ export default function PlayerClient({ discordId }: { discordId: string }) {
                                         const pointsImposter = rr.aborted ? 0 : (rr.winner === "imposter" ? 2 : 0);
                                         const pointsUnschuldig = rr.aborted ? 0 : (rr.winner === "imposter" ? 0 : 1);
                                         
+                                        // Für Duo: zeige Team statt Spielername (Team-Index + 1)
+                                        const imposterDisplay = meta?.mode === "duo" && rr.imposter_team_index != null
+                                          ? `Team ${rr.imposter_team_index + 1}`
+                                          : (rr.imposter_name ?? "—");
+                                        
                                         return (
                                         <tr key={rr.id} className={`border-t border-zinc-800 ${rr.aborted ? 'opacity-50' : ''}`}>
-                                          <td className="py-2">{rr.round_no}{rr.aborted ? ' ⚠️' : ''}</td>
-                                          <td className="py-2">{rr.imposter_name ?? "—"}</td>
-                                          <td className="py-2">{rr.aborted ? 'Abgebrochen' : winnerLabel(rr.winner)}</td>
-                                          <td className="py-2">{rr.aborted ? (rr.aborted_reason ?? '—') : winMethodLabel(rr.win_method)}</td>
-                                          <td className="py-2">{rr.categoryName ?? "—"}</td>
-                                          <td className="py-2">{rr.word ?? "—"}</td>
-                                          <td className="py-2">{rr.aborted ? '—' : pointsImposter}</td>
-                                          <td className="py-2">{rr.aborted ? '—' : pointsUnschuldig}</td>
+                                          <td className="py-2 px-2">
+                                            <span className="inline-block px-2 py-1 rounded text-xs font-semibold bg-gradient-to-r from-zinc-700/80 to-zinc-600/80 border border-zinc-400/40 text-zinc-100">
+                                              {rr.round_no}{rr.aborted ? ' ⚠️' : ''}
+                                            </span>
+                                          </td>
+                                          <td className="py-2 px-2">
+                                            <span className="inline-block px-2 py-1 rounded text-xs font-semibold bg-gradient-to-r from-red-900/60 to-red-800/60 border border-red-500/30 text-red-100">
+                                              {imposterDisplay}
+                                            </span>
+                                          </td>
+                                          <td className="py-2 px-2">
+                                            <span className="inline-block px-2 py-1 rounded text-xs font-semibold bg-gradient-to-r from-zinc-700/80 to-zinc-600/80 border border-zinc-400/40 text-zinc-100">
+                                              {rr.aborted ? 'Abgebrochen' : winnerLabel(rr.winner)}
+                                            </span>
+                                          </td>
+                                          <td className="py-2 px-2">
+                                            <span className="inline-block px-2 py-1 rounded text-xs font-semibold bg-gradient-to-r from-zinc-700/80 to-zinc-600/80 border border-zinc-400/40 text-zinc-100">
+                                              {rr.aborted ? (rr.aborted_reason ?? '—') : winMethodLabel(rr.win_method)}
+                                            </span>
+                                          </td>
+                                          <td className="py-2 px-2">
+                                            <span className="inline-block px-2 py-1 rounded text-xs font-semibold bg-gradient-to-r from-zinc-700/80 to-zinc-600/80 border border-zinc-400/40 text-zinc-100">
+                                              {formatCategoryName(rr.categoryName)}
+                                            </span>
+                                          </td>
+                                          <td className="py-2 px-2">
+                                            <span className="inline-block px-2 py-1 rounded text-xs font-semibold bg-gradient-to-r from-zinc-700/80 to-zinc-600/80 border border-zinc-400/40 text-zinc-100">
+                                              {rr.word ?? "—"}
+                                            </span>
+                                          </td>
+                                          <td className="py-2 px-2">
+                                            <span className="inline-block px-2 py-1 rounded text-xs font-semibold bg-gradient-to-r from-zinc-700/80 to-zinc-600/80 border border-zinc-400/40 text-zinc-100">
+                                              {rr.aborted ? '—' : pointsImposter}
+                                            </span>
+                                          </td>
+                                          <td className="py-2 px-2">
+                                            <span className="inline-block px-2 py-1 rounded text-xs font-semibold bg-gradient-to-r from-zinc-700/80 to-zinc-600/80 border border-zinc-400/40 text-zinc-100">
+                                              {rr.aborted ? '—' : pointsUnschuldig}
+                                            </span>
+                                          </td>
                                         </tr>
                                         );
                                       })}
@@ -629,7 +1349,75 @@ export default function PlayerClient({ discordId }: { discordId: string }) {
                                 <div className="text-sm text-zinc-300">Lade Spieler…</div>
                               ) : (playersByMatch[row.match_id] ?? []).length === 0 ? (
                                 <div className="text-sm text-zinc-400">Keine Spielerdaten gefunden.</div>
+                              ) : meta?.mode === "duo" ? (
+                                // Duo-Modus: Gruppiere nach Teams
+                                <div className="overflow-x-auto">
+                                  <table className="w-full text-sm">
+                                    <thead className="text-xs text-zinc-400">
+                                      <tr>
+                                        <th className="text-left py-2">Team</th>
+                                        <th className="text-left py-2">Spieler</th>
+                                        <th className="text-center py-2">Punkte</th>
+                                        <th className="text-center py-2">Coins</th>
+                                      </tr>
+                                    </thead>
+                                    <tbody>
+                                      {(() => {
+                                        // Gruppiere Spieler nach Platzierung
+                                        const byPlacement: Record<number, MatchPlayerRow[]> = {};
+                                        (playersByMatch[row.match_id] ?? []).forEach((mp) => {
+                                          if (!byPlacement[mp.placement]) byPlacement[mp.placement] = [];
+                                          byPlacement[mp.placement].push(mp);
+                                        });
+                                        
+                                        // Sortiere nach Platzierung
+                                        const sortedPlacements = Object.keys(byPlacement).map(Number).sort((a, b) => a - b);
+                                        
+                                        return sortedPlacements.map((placement) => {
+                                          const teamPlayers = byPlacement[placement];
+                                          return teamPlayers.map((mp, idx) => (
+                                            <tr key={mp.discord_id} className="border-t border-zinc-800">
+                                              {idx === 0 && (
+                                                <td className="py-2" rowSpan={teamPlayers.length}>
+                                                  <div className="flex items-center gap-2">
+                                                    <PlacementPill p={placement} />
+                                                    <span className="text-zinc-300">Team {placement}</span>
+                                                  </div>
+                                                </td>
+                                              )}
+                                              <td className="py-2">
+                                                <span className="inline-block px-2 py-1 rounded text-xs font-semibold bg-gradient-to-r from-zinc-700/80 to-zinc-600/80 border border-zinc-400/40">
+                                                  <Link 
+                                                    href={`/player/${encodeURIComponent(mp.discord_id)}`}
+                                                    className="text-blue-400 hover:text-blue-300 hover:underline"
+                                                  >
+                                                    {mp.player_name}
+                                                  </Link>
+                                                </span>
+                                              </td>
+                                              {idx === 0 && (
+                                                <>
+                                                  <td className="py-2 text-center" rowSpan={teamPlayers.length}>
+                                                    <span className="inline-block px-2 py-1 rounded text-xs font-semibold bg-gradient-to-r from-zinc-700/80 to-zinc-600/80 border border-zinc-400/40 text-zinc-100">
+                                                      {mp.total_points}
+                                                    </span>
+                                                  </td>
+                                                  <td className="py-2 text-center" rowSpan={teamPlayers.length}>
+                                                    <span className="inline-block px-2 py-1 rounded text-xs font-semibold bg-gradient-to-r from-orange-900/60 to-orange-800/60 border border-orange-500/30 text-orange-100">
+                                                      {mp.duo_coins_delta ? `${mp.duo_coins_delta >= 0 ? "+" : ""}${mp.duo_coins_delta}` : "—"}
+                                                    </span>
+                                                  </td>
+                                                </>
+                                              )}
+                                            </tr>
+                                          ));
+                                        });
+                                      })()}
+                                    </tbody>
+                                  </table>
+                                </div>
                               ) : (
+                                // Ranked/Zwanglos: Normale Anzeige
                                 <div className="overflow-x-auto">
                                   <table className="w-full text-sm">
                                     <thead className="text-xs text-zinc-400">
@@ -637,25 +1425,39 @@ export default function PlayerClient({ discordId }: { discordId: string }) {
                                         <th className="text-left py-2">Platz</th>
                                         <th className="text-left py-2">Spieler</th>
                                         <th className="text-center py-2">Punkte</th>
-                                        <th className="text-center py-2">Elo Δ</th>
+                                        <th className="text-center py-2">Elo/Coins</th>
                                       </tr>
                                     </thead>
                                     <tbody>
                                       {(playersByMatch[row.match_id] ?? []).map((mp) => (
                                         <tr key={mp.discord_id} className="border-t border-zinc-800">
-                                          <td className="py-2">{mp.placement}</td>
                                           <td className="py-2">
-                                            <Link 
-                                              href={`/player/${encodeURIComponent(mp.discord_id)}`}
-                                              className="text-blue-400 hover:text-blue-300 hover:underline"
-                                            >
-                                              {mp.player_name}
-                                            </Link>
+                                            {mp.placement ? <PlacementPill p={mp.placement} /> : "—"}
                                           </td>
-                                          <td className="py-2 text-center">{mp.total_points}</td>
+                                          <td className="py-2">
+                                            <span className="inline-block px-2 py-1 rounded text-xs font-semibold bg-gradient-to-r from-zinc-700/80 to-zinc-600/80 border border-zinc-400/40">
+                                              <Link 
+                                                href={`/player/${encodeURIComponent(mp.discord_id)}`}
+                                                className="text-blue-400 hover:text-blue-300 hover:underline"
+                                              >
+                                                {mp.player_name}
+                                              </Link>
+                                            </span>
+                                          </td>
                                           <td className="py-2 text-center">
-                                            {meta?.mode === "zwanglos" ? "—" : (
-                                              <span className={mp.elo_delta >= 0 ? "text-green-400" : "text-red-400"}>
+                                            <span className="inline-block px-2 py-1 rounded text-xs font-semibold bg-gradient-to-r from-zinc-700/80 to-zinc-600/80 border border-zinc-400/40 text-zinc-100">
+                                              {mp.total_points}
+                                            </span>
+                                          </td>
+                                          <td className="py-2 text-center">
+                                            {(meta?.mode === "zwanglos") ? (
+                                              <span className="text-zinc-400">—</span>
+                                            ) : (
+                                              <span className={
+                                                mp.elo_delta >= 0
+                                                  ? "inline-block px-2 py-1 rounded text-xs font-semibold bg-gradient-to-r from-green-900/60 to-green-800/60 border border-green-500/30 text-green-100"
+                                                  : "inline-block px-2 py-1 rounded text-xs font-semibold bg-gradient-to-r from-red-900/60 to-red-800/60 border border-red-500/30 text-red-100"
+                                              }>
                                                 {mp.elo_delta >= 0 ? "+" : ""}{mp.elo_delta}
                                               </span>
                                             )}

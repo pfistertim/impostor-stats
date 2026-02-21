@@ -14,6 +14,7 @@ type PlayerRow = {
   wins_imposter_casual: number | null;
   wins_crew_ranked: number | null;
   wins_crew_casual: number | null;
+  duo_coins: number | null;
 };
 
 type LeaderRow = {
@@ -32,6 +33,13 @@ type LeaderRow = {
   crewWinsTotal: number;
 
   last5Placements: number[];
+};
+
+type DuoLeaderRow = {
+  discord_id: string;
+  name: string;
+  duoCoins: number;
+  last5DuoPlacements: number[];
 };
 
 type RankInfo = {
@@ -76,6 +84,7 @@ function getRankInfo(elo: number, gamesRanked: number) {
       label: "Unranked",
       badgePath: "/badges/unranked.png",
       value: null as null,
+      tier: "unranked" as const,
     };
   }
 
@@ -83,26 +92,155 @@ function getRankInfo(elo: number, gamesRanked: number) {
   for (const r of RANKS) if (elo >= r.min) best = r;
 
   const value = best.isMaster ? Math.max(0, elo - 2100) : ((elo % 100) + 100) % 100;
-  return { ...best, value };
+  
+  // Bestimme Tier basierend auf Elo
+  let tier: "unranked" | "eisen" | "bronze" | "silver" | "gold" | "platin" | "diamant" | "master" = "unranked";
+  if (elo >= 2100) tier = "master";
+  else if (elo >= 1800) tier = "diamant";
+  else if (elo >= 1500) tier = "platin";
+  else if (elo >= 1200) tier = "gold";
+  else if (elo >= 900) tier = "silver";
+  else if (elo >= 600) tier = "bronze";
+  else if (elo >= 300) tier = "eisen";
+  
+  return { ...best, value, tier };
+}
+
+function getBadgeEffects(tier: "unranked" | "eisen" | "bronze" | "silver" | "gold" | "platin" | "diamant" | "master") {
+  switch (tier) {
+    case "unranked":
+      return {
+        className: "",
+        style: {},
+      };
+    case "eisen":
+      return {
+        className: "",
+        style: {
+          filter: "drop-shadow(0 0 4px rgba(120, 120, 120, 0.4))",
+        },
+      };
+    case "bronze":
+      return {
+        className: "",
+        style: {
+          filter: "drop-shadow(0 0 4px rgba(180, 83, 9, 0.4))",
+        },
+      };
+    case "silver":
+      return {
+        className: "",
+        style: {
+          filter: "drop-shadow(0 0 4px rgba(192, 192, 192, 0.4))",
+        },
+      };
+    case "gold":
+      return {
+        className: "animate-subtle-pulse",
+        style: {
+          filter: "drop-shadow(0 0 6px rgba(255, 215, 0, 0.5))",
+        },
+      };
+    case "platin":
+      return {
+        className: "animate-subtle-pulse",
+        style: {
+          filter: "drop-shadow(0 0 8px rgba(0, 255, 255, 0.6))",
+        },
+      };
+    case "diamant":
+      return {
+        className: "animate-subtle-pulse",
+        style: {
+          filter: "drop-shadow(0 0 10px rgba(0, 191, 255, 0.7))",
+        },
+      };
+    case "master":
+      return {
+        className: "animate-rainbow-glow",
+        style: {
+          // Rainbow-Glow wird durch die Animation gesteuert
+        },
+      };
+  }
 }
 
 function PlacementPill({ p }: { p: number }) {
   const cls =
     p === 1
-      ? "bg-green-900/70 text-green-50 border-green-700/50"
+      ? "text-yellow-50 border-yellow-400/60 shadow-lg shadow-yellow-500/30"
       : p === 2
-      ? "bg-green-700/50 text-green-50 border-green-500/40"
+      ? "text-gray-50 border-gray-300/60 shadow-md shadow-gray-400/20"
       : p === 3
-      ? "bg-red-700/40 text-red-50 border-red-500/40"
-      : "bg-red-900/70 text-red-50 border-red-700/50";
+      ? "text-amber-50 border-amber-600/60 shadow-md shadow-amber-700/20"
+      : "bg-gradient-to-br from-red-800 via-red-900 to-red-950 text-red-50 border-red-700/50";
+
+  const metalStyle = 
+    p === 1 ? {
+      backgroundImage: 'linear-gradient(135deg, #fbbf24, #f59e0b, #fef3c7, #f59e0b, #fbbf24)',
+      textShadow: '0 0 2px rgba(0,0,0,0.8), 0 0 4px rgba(0,0,0,0.6)',
+    } : p === 2 ? {
+      backgroundImage: 'linear-gradient(135deg, #d1d5db, #9ca3af, #f3f4f6, #9ca3af, #d1d5db)',
+      textShadow: '0 0 2px rgba(0,0,0,0.8), 0 0 4px rgba(0,0,0,0.6)',
+    } : p === 3 ? {
+      backgroundImage: 'linear-gradient(135deg, #b45309, #d97706, #ca8a04, #d97706, #b45309)',
+      textShadow: '0 0 2px rgba(0,0,0,0.8), 0 0 4px rgba(0,0,0,0.6)',
+    } : {
+      textShadow: '0 0 2px rgba(0,0,0,0.8), 0 0 4px rgba(0,0,0,0.6)',
+    };
 
   return (
     <span
       className={[
         "inline-flex items-center justify-center rounded-md border font-semibold",
-        "h-8 w-8 text-xs",
+        "h-8 w-8 text-xs transition-all duration-300 hover:scale-110",
+        p === 1 ? "animate-subtle-pulse animate-gold-flow" : 
+        p === 2 ? "animate-silver-flow" :
+        p === 3 ? "animate-bronze-flow" : "",
         cls,
       ].join(" ")}
+      style={metalStyle}
+    >
+      {p}.
+    </span>
+  );
+}
+
+function DuoPlacementPill({ p }: { p: number }) {
+  const cls =
+    p === 1
+      ? "text-yellow-50 border-yellow-400/60 shadow-lg shadow-yellow-500/30"
+      : p === 2
+      ? "text-gray-50 border-gray-300/60 shadow-md shadow-gray-400/20"
+      : p === 3
+      ? "text-amber-50 border-amber-600/60 shadow-md shadow-amber-700/20"
+      : "bg-gradient-to-br from-red-800 via-red-900 to-red-950 text-red-50 border-red-700/50";
+
+  const metalStyle = 
+    p === 1 ? {
+      backgroundImage: 'linear-gradient(135deg, #fbbf24, #f59e0b, #fef3c7, #f59e0b, #fbbf24)',
+      textShadow: '0 0 2px rgba(0,0,0,0.8), 0 0 4px rgba(0,0,0,0.6)',
+    } : p === 2 ? {
+      backgroundImage: 'linear-gradient(135deg, #d1d5db, #9ca3af, #f3f4f6, #9ca3af, #d1d5db)',
+      textShadow: '0 0 2px rgba(0,0,0,0.8), 0 0 4px rgba(0,0,0,0.6)',
+    } : p === 3 ? {
+      backgroundImage: 'linear-gradient(135deg, #b45309, #d97706, #ca8a04, #d97706, #b45309)',
+      textShadow: '0 0 2px rgba(0,0,0,0.8), 0 0 4px rgba(0,0,0,0.6)',
+    } : {
+      textShadow: '0 0 2px rgba(0,0,0,0.8), 0 0 4px rgba(0,0,0,0.6)',
+    };
+
+  return (
+    <span
+      className={[
+        "inline-flex items-center justify-center rounded-md border font-semibold",
+        "h-8 w-8 text-xs transition-all duration-300 hover:scale-110",
+        p === 1 ? "animate-subtle-pulse animate-gold-flow" : 
+        p === 2 ? "animate-silver-flow" :
+        p === 3 ? "animate-bronze-flow" : "",
+        cls,
+      ].join(" ")}
+      style={metalStyle}
     >
       {p}.
     </span>
@@ -123,7 +261,7 @@ function MiniTable({
   top: number;
 }) {
   return (
-    <div className="rounded-xl border border-white/10 bg-white/5">
+    <div className="rounded-xl border border-white/20 bg-gradient-to-br from-black via-gray-800/30 to-black shadow-lg shadow-gray-700/20">
       <div className="px-3 py-2">
         <div className="text-sm font-semibold text-white/85">{title}</div>
       </div>
@@ -152,6 +290,9 @@ export default function Home() {
   // Mini tables: default 10, expand up to 100
   const [miniLimit, setMiniLimit] = useState(10);
 
+  // Duo Coin Leaderboard: default 10, expand up to 100
+  const [duoLimit, setDuoLimit] = useState(10);
+
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState<string | null>(null);
 
@@ -160,6 +301,9 @@ export default function Home() {
 
   // Für Suche (alle Spieler)
   const [allPlayers, setAllPlayers] = useState<LeaderRow[]>([]);
+
+  // Duo Coin Leaderboard
+  const [duoLeaders, setDuoLeaders] = useState<DuoLeaderRow[]>([]);
 
   // Mini tables
   const [mostGames, setMostGames] = useState<LeaderRow[]>([]);
@@ -178,7 +322,7 @@ export default function Home() {
         const { data, error } = await supabase
           .from("players")
           .select(
-            "discord_id,last_name,elo_ranked,games_ranked,games_casual,wins_imposter_ranked,wins_imposter_casual,wins_crew_ranked,wins_crew_casual"
+            "discord_id,last_name,elo_ranked,games_ranked,games_casual,duo_games,wins_imposter_ranked,wins_imposter_casual,wins_crew_ranked,wins_crew_casual,duo_coins"
           )
           .limit(5000);
 
@@ -187,8 +331,9 @@ export default function Home() {
         const mapped: LeaderRow[] = (data ?? []).map((p: PlayerRow) => {
           const gamesRanked = Number(p.games_ranked ?? 0);
           const gamesCasual = Number(p.games_casual ?? 0);
+          const gamesDuo = Number((p as any).duo_games ?? 0);
 
-          const gamesTotal = gamesRanked + gamesCasual;
+          const gamesTotal = gamesRanked + gamesCasual + gamesDuo;
 
           const impWinsTotal =
             Number(p.wins_imposter_ranked ?? 0) + Number(p.wins_imposter_casual ?? 0);
@@ -211,6 +356,44 @@ export default function Home() {
         // Für Suche: alle Spieler speichern
         if (!alive) return;
         setAllPlayers(mapped);
+
+        // Berechne Runden-Siege aus round_player_points
+        const allPlayerIds = mapped.map((p) => p.discord_id);
+        
+        if (allPlayerIds.length > 0) {
+          const { data: roundPoints, error: rpErr } = await supabase
+            .from("round_player_points")
+            .select("discord_id,points")
+            .in("discord_id", allPlayerIds);
+
+          if (rpErr) throw new Error(rpErr.message);
+
+          // Zähle Runden-Siege pro Spieler
+          const roundWins: Record<string, { imposter: number; crew: number }> = {};
+          
+          for (const rp of roundPoints ?? []) {
+            const did = String(rp.discord_id);
+            const points = Number(rp.points);
+            
+            if (!roundWins[did]) {
+              roundWins[did] = { imposter: 0, crew: 0 };
+            }
+            
+            if (points === 2) {
+              roundWins[did].imposter++;
+            } else if (points === 1) {
+              roundWins[did].crew++;
+            }
+          }
+
+          // Aktualisiere mapped mit den echten Runden-Siegen
+          for (const p of mapped) {
+            if (roundWins[p.discord_id]) {
+              p.impWinsTotal = roundWins[p.discord_id].imposter;
+              p.crewWinsTotal = roundWins[p.discord_id].crew;
+            }
+          }
+        }
 
         // Ranked Top 200: NUR ranked-qualified (>=6 ranked games)
         const rankedTop200 = [...mapped]
@@ -251,6 +434,82 @@ export default function Home() {
         if (!alive) return;
 
         setLeaders(rankedWithPlacements);
+
+        // Duo Coin Leaderboard: Top 100 nach duo_coins sortiert
+        const duoTop100 = [...mapped]
+          .map((p) => ({
+            discord_id: p.discord_id,
+            name: p.name,
+            duoCoins: Number((data ?? []).find((d: PlayerRow) => String(d.discord_id) === p.discord_id)?.duo_coins ?? 0),
+            last5DuoPlacements: [] as number[],
+          }))
+          .filter((p) => p.duoCoins > 0)
+          .sort((a, b) => b.duoCoins - a.duoCoins)
+          .slice(0, 100);
+
+        const duoIds = duoTop100.map((x) => x.discord_id);
+
+        // Letzte 5 Duo-Platzierungen berechnen aus duo_teams
+        let duoWithPlacements = duoTop100;
+
+        if (duoIds.length > 0) {
+          // Hole alle Duo-Matches mit Teams
+          const { data: duoMatches, error: duoErr } = await supabase
+            .from("matches")
+            .select("id,started_at,duo_teams(team_index,captain_discord_id,member_discord_id,score)")
+            .eq("mode", "duo")
+            .order("started_at", { ascending: false })
+            .limit(500);
+
+          if (duoErr) {
+            console.error("Duo matches error:", duoErr);
+          } else {
+            console.log("Duo matches loaded:", duoMatches?.length);
+            
+            // Für jeden Spieler: sammle Platzierungen
+            const playerPlacements: Record<string, number[]> = {};
+            
+            for (const match of duoMatches ?? []) {
+              const teams = (match as any).duo_teams ?? [];
+              if (teams.length === 0) continue;
+              
+              // Sortiere Teams nach Score (höchster = Platz 1)
+              const sortedTeams = [...teams].sort((a: any, b: any) => b.score - a.score);
+              
+              // Vergebe Platzierungen
+              sortedTeams.forEach((team: any, idx: number) => {
+                const placement = idx + 1;
+                const captain = String(team.captain_discord_id);
+                const member = String(team.member_discord_id);
+                
+                // Nur für Spieler im Top 100
+                if (duoIds.includes(captain)) {
+                  if (!playerPlacements[captain]) playerPlacements[captain] = [];
+                  if (playerPlacements[captain].length < 5) {
+                    playerPlacements[captain].push(placement);
+                  }
+                }
+                
+                if (duoIds.includes(member)) {
+                  if (!playerPlacements[member]) playerPlacements[member] = [];
+                  if (playerPlacements[member].length < 5) {
+                    playerPlacements[member].push(placement);
+                  }
+                }
+              });
+            }
+
+            console.log("Player placements:", playerPlacements);
+
+            duoWithPlacements = duoTop100.map((p) => ({
+              ...p,
+              last5DuoPlacements: playerPlacements[p.discord_id] ?? [],
+            }));
+          }
+        }
+
+        if (!alive) return;
+        setDuoLeaders(duoWithPlacements);
 
         // Mini tables: basieren auf ALLEN Spielern
         setMostGames([...mapped].sort((a, b) => b.gamesTotal - a.gamesTotal));
@@ -295,6 +554,9 @@ export default function Home() {
   const canShowMoreMini = miniLimit < 100;
   const canShowLessMini = miniLimit > 10;
 
+  const canShowMoreDuo = duoLimit < 100;
+  const canShowLessDuo = duoLimit > 10;
+
   const isSearching = q.trim().length > 0;
 
   return (
@@ -323,11 +585,11 @@ export default function Home() {
         </div>
 
         {/* Ranked/Suche Liste */}
-        <div className="rounded-2xl border border-white/10 bg-white/5">
+        <div className="rounded-2xl border border-blue-500/30 bg-gradient-to-br from-black via-blue-900/40 to-black shadow-lg shadow-blue-700/30">
           <div className="flex items-center justify-between px-3 py-2">
             <div>
               <div className="text-base font-semibold text-white/90">
-                {isSearching ? "Suche" : "Ranked"}
+                {isSearching ? "Suche" : "Ranked Leaderboard"}
               </div>
               <div className="text-sm text-white/60">
                 {Math.min(rankLimit, 200)} / {Math.min(filteredAll.length, 200)}
@@ -347,6 +609,7 @@ export default function Home() {
             {filteredVisible.map((p, idx) => {
               const r = getRankInfo(p.elo, p.gamesRanked);
               const qualified = p.gamesRanked >= 6;
+              const badgeEffects = getBadgeEffects(r.tier);
 
               return (
                 <Link
@@ -361,12 +624,34 @@ export default function Home() {
                     </div>
 
                     {/* Badge */}
-                    <div className="relative h-15 w-12 shrink-0">
+                    <div 
+                      className={`relative h-15 w-12 shrink-0 ${badgeEffects.className}`}
+                      style={badgeEffects.style}
+                    >
                       <img
                         src={r.badgePath}
                         alt={r.label}
                         className="absolute left-0 top-0 h-14 w-11 object-contain pointer-events-none [transform:translate(6px,6px)_scale(2.4)] [transform-origin:center]"
                       />
+                      {(r.tier === "gold" || r.tier === "platin" || r.tier === "diamant" || r.tier === "master") && (
+                        <div 
+                          className="absolute left-0 top-0 h-14 w-11 pointer-events-none [transform:translate(6px,6px)_scale(2.4)] [transform-origin:center]"
+                          style={{
+                            background: 'linear-gradient(90deg, transparent 0%, rgba(255, 255, 255, 0.5) 50%, transparent 100%)',
+                            backgroundSize: '200% 100%',
+                            animation: 'light-reflection 10s ease-in-out infinite',
+                            mixBlendMode: 'overlay',
+                            maskImage: `url(${r.badgePath})`,
+                            WebkitMaskImage: `url(${r.badgePath})`,
+                            maskSize: 'contain',
+                            WebkitMaskSize: 'contain',
+                            maskRepeat: 'no-repeat',
+                            WebkitMaskRepeat: 'no-repeat',
+                            maskPosition: 'center',
+                            WebkitMaskPosition: 'center',
+                          }}
+                        />
+                      )}
                     </div>
 
                     {/* Name + Rank */}
@@ -442,9 +727,108 @@ export default function Home() {
           </div>
         </div>
 
+        {/* Duo Coin Leaderboard */}
+        <div className="mt-4 rounded-2xl border border-orange-500/30 bg-gradient-to-br from-black via-orange-900/40 to-black shadow-lg shadow-orange-700/30">
+          <div className="flex items-center justify-between px-3 py-2">
+            <div>
+              <div className="text-base font-semibold text-white/90">Duo Leaderboard</div>
+              <div className="text-sm text-white/60">
+                Top {duoLimit} • Duo Coins & letzte 5 Duo Platzierungen
+              </div>
+            </div>
+
+            <div className="hidden sm:block text-sm text-white/60">Letzte 5 Duo Platzierungen</div>
+          </div>
+
+          {err && <div className="px-3 pb-3 text-sm text-red-300">Fehler: {err}</div>}
+          {loading && <div className="px-3 pb-3 text-sm text-white/50">Lade…</div>}
+
+          <div className="divide-y divide-white/10">
+            {duoLeaders.slice(0, duoLimit).map((p, idx) => (
+              <Link
+                key={p.discord_id}
+                href={`/player/${encodeURIComponent(p.discord_id)}`}
+                className="block"
+              >
+                <div className="flex items-center gap-2 px-3 py-2 hover:bg-white/5 cursor-pointer">
+                  {/* Platz */}
+                  <div className="w-8 text-right text-sm text-white/55">{idx + 1}</div>
+
+                  {/* Name */}
+                  <div className="min-w-0 flex-1 truncate text-base font-semibold text-white/90">
+                    {p.name}
+                  </div>
+
+                  {/* Duo Coins Anzahl (Gold) */}
+                  <div 
+                    className="text-2xl font-bold animate-subtle-pulse animate-gold-flow"
+                    style={{
+                      fontFamily: '"Segoe UI", "Roboto", "Helvetica Neue", Arial, sans-serif',
+                      backgroundImage: 'linear-gradient(135deg, #fbbf24, #f59e0b, #fef3c7, #f59e0b, #fbbf24)',
+                      backgroundClip: 'text',
+                      WebkitBackgroundClip: 'text',
+                      WebkitTextFillColor: 'transparent',
+                      letterSpacing: '0.02em',
+                      filter: 'drop-shadow(0 0 3px rgba(0,0,0,0.9)) drop-shadow(0 0 6px rgba(0,0,0,0.7))',
+                    }}
+                  >
+                    {p.duoCoins}
+                  </div>
+
+                  {/* Duo Coin Badge - kompakte Größe */}
+                  <div className="h-10 w-10 shrink-0 flex items-center justify-center">
+                    <img
+                      src="/badges/Duocoin.png"
+                      alt="Duo Coin"
+                      className="h-10 w-10 object-contain"
+                    />
+                  </div>
+
+                  {/* Letzte 5 Duo Platzierungen */}
+                  <div className="hidden sm:flex items-center gap-1">
+                    {(p.last5DuoPlacements ?? []).slice(0, 5).map((pl, i) => (
+                      <DuoPlacementPill key={i} p={pl} />
+                    ))}
+                    {(!p.last5DuoPlacements || p.last5DuoPlacements.length === 0) && (
+                      <span className="text-sm text-white/40">—</span>
+                    )}
+                  </div>
+                </div>
+              </Link>
+            ))}
+
+            {!loading && duoLeaders.length === 0 && (
+              <div className="px-3 py-4 text-sm text-white/60">Keine Duo Coins vorhanden.</div>
+            )}
+          </div>
+
+          {/* Mehr/Weniger Buttons */}
+          <div className="flex items-center justify-between px-3 py-3">
+            <div className="text-sm text-white/60">Standard: Top 10 • Max: Top 100</div>
+            <div className="flex gap-2">
+              {canShowLessDuo && (
+                <button
+                  onClick={() => setDuoLimit(10)}
+                  className="rounded-lg border border-white/10 bg-black/30 px-3 py-1.5 text-sm text-white/80 hover:bg-black/40"
+                >
+                  Top 10
+                </button>
+              )}
+              {canShowMoreDuo && (
+                <button
+                  onClick={() => setDuoLimit(100)}
+                  className="rounded-lg border border-white/10 bg-black/30 px-3 py-1.5 text-sm text-white/80 hover:bg-black/40"
+                >
+                  Top 100
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+
         {/* Mini Tabellen + Toggle */}
         <div className="mt-4 flex items-center justify-between">
-          <div className="text-base font-semibold text-white/85">Mini-Toplisten</div>
+          <div className="text-base font-semibold text-white/85">Weitere Top Listen</div>
           <div className="flex gap-2">
             {canShowLessMini && (
               <button

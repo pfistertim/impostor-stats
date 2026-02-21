@@ -24,3 +24,312 @@ body {
   color: var(--foreground);
   font-family: Arial, Helvetica, sans-serif;
 }
+
+@keyframes subtle-pulse {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.85;
+  }
+}
+
+@keyframes medium-pulse {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.7;
+  }
+}
+
+@keyframes strong-pulse {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.6;
+  }
+}
+
+@keyframes gentle-rotate {
+  0% {
+    transform: rotate(0deg);
+  }
+  100% {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes light-reflection {
+  0%, 90%, 100% {
+    background-position: -200% center;
+  }
+  10%, 80% {
+    background-position: 200% center;
+  }
+}
+
+@keyframes rainbow-glow {
+  0% {
+    filter: drop-shadow(0 0 8px rgba(255, 0, 0, 0.6));
+  }
+  16% {
+    filter: drop-shadow(0 0 8px rgba(255, 165, 0, 0.6));
+  }
+  33% {
+    filter: drop-shadow(0 0 8px rgba(255, 255, 0, 0.6));
+  }
+  50% {
+    filter: drop-shadow(0 0 8px rgba(0, 255, 0, 0.6));
+  }
+  66% {
+    filter: drop-shadow(0 0 8px rgba(0, 0, 255, 0.6));
+  }
+  83% {
+    filter: drop-shadow(0 0 8px rgba(238, 130, 238, 0.6));
+  }
+  100% {
+    filter: drop-shadow(0 0 8px rgba(255, 0, 0, 0.6));
+  }
+}
+
+@keyframes diamant-rainbow-glow {
+  0%, 100% {
+    box-shadow: 0 0 30px rgba(224, 242, 254, 0.7), 0 0 60px rgba(224, 242, 254, 0.4);
+  }
+  14% {
+    box-shadow: 0 0 30px rgba(207, 250, 254, 0.7), 0 0 60px rgba(207, 250, 254, 0.4);
+  }
+  28% {
+    box-shadow: 0 0 30px rgba(165, 243, 252, 0.7), 0 0 60px rgba(165, 243, 252, 0.4);
+  }
+  42% {
+    box-shadow: 0 0 30px rgba(103, 232, 249, 0.7), 0 0 60px rgba(103, 232, 249, 0.4);
+  }
+  56% {
+    box-shadow: 0 0 30px rgba(34, 211, 238, 0.7), 0 0 60px rgba(34, 211, 238, 0.4);
+  }
+  70% {
+    box-shadow: 0 0 30px rgba(6, 182, 212, 0.7), 0 0 60px rgba(6, 182, 212, 0.4);
+  }
+  84% {
+    box-shadow: 0 0 30px rgba(8, 145, 178, 0.7), 0 0 60px rgba(8, 145, 178, 0.4);
+  }
+}
+
+@keyframes platin-rainbow-glow {
+  0%, 100% {
+    box-shadow: 0 0 30px rgba(243, 244, 246, 0.7), 0 0 60px rgba(243, 244, 246, 0.4);
+  }
+  14% {
+    box-shadow: 0 0 30px rgba(229, 231, 235, 0.7), 0 0 60px rgba(229, 231, 235, 0.4);
+  }
+  28% {
+    box-shadow: 0 0 30px rgba(209, 213, 219, 0.7), 0 0 60px rgba(209, 213, 219, 0.4);
+  }
+  42% {
+    box-shadow: 0 0 30px rgba(156, 163, 175, 0.7), 0 0 60px rgba(156, 163, 175, 0.4);
+  }
+  56% {
+    box-shadow: 0 0 30px rgba(107, 114, 128, 0.7), 0 0 60px rgba(107, 114, 128, 0.4);
+  }
+  70% {
+    box-shadow: 0 0 30px rgba(156, 163, 175, 0.7), 0 0 60px rgba(156, 163, 175, 0.4);
+  }
+  84% {
+    box-shadow: 0 0 30px rgba(209, 213, 219, 0.7), 0 0 60px rgba(209, 213, 219, 0.4);
+  }
+}
+
+@keyframes gold-glow {
+  0%, 100% {
+    box-shadow: 0 0 20px rgba(234, 179, 8, 0.3), 0 0 40px rgba(234, 179, 8, 0.1);
+  }
+  50% {
+    box-shadow: 0 0 30px rgba(251, 191, 36, 0.4), 0 0 60px rgba(251, 191, 36, 0.2);
+  }
+}
+
+@keyframes platin-glow {
+  0%, 100% {
+    box-shadow: 0 0 20px rgba(229, 231, 235, 0.3), 0 0 40px rgba(229, 231, 235, 0.1);
+  }
+  50% {
+    box-shadow: 0 0 30px rgba(243, 244, 246, 0.4), 0 0 60px rgba(243, 244, 246, 0.2);
+  }
+}
+
+@keyframes diamant-glow {
+  0%, 100% {
+    box-shadow: 0 0 25px rgba(8, 145, 178, 0.4), 0 0 50px rgba(8, 145, 178, 0.15);
+  }
+  50% {
+    box-shadow: 0 0 35px rgba(6, 182, 212, 0.5), 0 0 70px rgba(6, 182, 212, 0.25);
+  }
+}
+
+@keyframes diamant-gradient-shift {
+  0%, 100% {
+    background: linear-gradient(135deg, #e0f2fe 0%, #a5f3fc 50%, #67e8f9 100%);
+  }
+  20% {
+    background: linear-gradient(135deg, #cffafe 0%, #67e8f9 50%, #22d3ee 100%);
+  }
+  40% {
+    background: linear-gradient(135deg, #a5f3fc 0%, #22d3ee 50%, #06b6d4 100%);
+  }
+  60% {
+    background: linear-gradient(135deg, #67e8f9 0%, #06b6d4 50%, #0891b2 100%);
+  }
+  80% {
+    background: linear-gradient(135deg, #22d3ee 0%, #0891b2 50%, #67e8f9 100%);
+  }
+}
+
+@keyframes gold-flow {
+  0% {
+    background-position: 0% 50%;
+  }
+  50% {
+    background-position: 100% 50%;
+  }
+  100% {
+    background-position: 0% 50%;
+  }
+}
+
+@keyframes silver-flow {
+  0% {
+    background-position: 0% 50%;
+  }
+  50% {
+    background-position: 100% 50%;
+  }
+  100% {
+    background-position: 0% 50%;
+  }
+}
+
+@keyframes bronze-flow {
+  0% {
+    background-position: 0% 50%;
+  }
+  50% {
+    background-position: 100% 50%;
+  }
+  100% {
+    background-position: 0% 50%;
+  }
+}
+
+@keyframes diamant-flow {
+  0% {
+    background-position: 0% 50%;
+  }
+  50% {
+    background-position: 100% 50%;
+  }
+  100% {
+    background-position: 0% 50%;
+  }
+}
+
+@keyframes platin-flow {
+  0% {
+    background-position: 0% 50%;
+  }
+  50% {
+    background-position: 100% 50%;
+  }
+  100% {
+    background-position: 0% 50%;
+  }
+}
+
+.animate-subtle-pulse {
+  animation: subtle-pulse 3s ease-in-out infinite;
+}
+
+.animate-medium-pulse {
+  animation: medium-pulse 2.5s ease-in-out infinite;
+}
+
+.animate-strong-pulse {
+  animation: strong-pulse 2s ease-in-out infinite;
+}
+
+.animate-gentle-rotate {
+  animation: gentle-rotate 8s linear infinite;
+}
+
+.animate-rainbow-glow {
+  animation: rainbow-glow 3s linear infinite;
+}
+
+.animate-diamant-rainbow-glow {
+  animation: diamant-rainbow-glow 5s linear infinite;
+}
+
+.animate-platin-rainbow-glow {
+  animation: platin-rainbow-glow 8s linear infinite;
+}
+
+.animate-light-reflection {
+  position: relative;
+  overflow: hidden;
+}
+
+.animate-light-reflection::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(90deg, transparent 0%, rgba(255, 255, 255, 0.6) 50%, transparent 100%);
+  background-size: 200% 100%;
+  animation: light-reflection 10s ease-in-out infinite;
+  pointer-events: none;
+}
+
+.animate-gold-flow {
+  background-size: 300% 300%;
+  animation: gold-flow 4s ease-in-out infinite;
+}
+
+.animate-silver-flow {
+  background-size: 250% 250%;
+  animation: silver-flow 5s ease-in-out infinite;
+}
+
+.animate-bronze-flow {
+  background-size: 200% 200%;
+  animation: bronze-flow 8s ease-in-out infinite;
+}
+
+.animate-diamant-flow {
+  background-size: 300% 300%;
+  animation: diamant-flow 10s ease-in-out infinite;
+}
+
+.animate-platin-flow {
+  background-size: 300% 300%;
+  animation: platin-flow 15s ease-in-out infinite;
+}
+
+.animate-gold-glow {
+  animation: gold-glow 4s ease-in-out infinite;
+}
+
+.animate-platin-glow {
+  animation: platin-glow 4s ease-in-out infinite;
+}
+
+.animate-diamant-glow {
+  animation: diamant-glow 4s ease-in-out infinite;
+}
+
+.animate-diamant-gradient-shift {
+  animation: diamant-gradient-shift 12s ease-in-out infinite;
+}

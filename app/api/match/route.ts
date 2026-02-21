@@ -316,17 +316,16 @@ async function handleDuoMatch(body: any) {
     }
   }
 
-  // ✅ Teams aus Players-Array extrahieren und speichern
-  const teamsByIndex = new Map<number, { captain: any; member: any; score: number; coins: number }>();
+  // ✅ Teams aus Players-Array extrahieren
+  const teamsByIndex = new Map<number, { captain: any; member: any; score: number }>();
   
   for (const player of players) {
     const teamIdx = Number(player.team_index ?? 0);
     const isCaptain = Boolean(player.is_captain);
-    const coinsEarned = Number(player.coins_earned ?? 0);
     const score = Number(player.total_points ?? 0);
     
     if (!teamsByIndex.has(teamIdx)) {
-      teamsByIndex.set(teamIdx, { captain: null, member: null, score: 0, coins: coinsEarned });
+      teamsByIndex.set(teamIdx, { captain: null, member: null, score: 0 });
     }
     
     const team = teamsByIndex.get(teamIdx)!;
@@ -338,6 +337,65 @@ async function handleDuoMatch(body: any) {
     team.score = Math.max(team.score, score); // Nehme höchsten Score (sollte gleich sein)
   }
 
+  // ✅ Coins berechnen - bei Violation vom Bot übernehmen, sonst selbst berechnen
+  let coinDistribution: Record<number, number> = {};
+  
+  // Prüfe ob es eine Violation gibt
+  const hasViolation = body.violation?.type && body.violation?.team !== undefined;
+  
+  if (hasViolation) {
+    // ✅ Bei Violation: Coins vom Bot übernehmen (bereits korrekt berechnet)
+    for (const player of players) {
+      const teamIdx = Number(player.team_index ?? 0);
+      const coinsEarned = Number(player.coins_earned ?? 0);
+      coinDistribution[teamIdx] = coinsEarned;
+    }
+  } else {
+    // ✅ Normales Spiel: Coins mit Gleichstands-Logik berechnen
+    const rankings = Array.from(teamsByIndex.entries())
+      .map(([teamIdx, team]) => ({ teamIdx, score: team.score }))
+      .sort((a, b) => b.score - a.score);
+    
+    const placementCoins = [20, 10, 0, -10];
+    
+    let currentRank = 0;
+    let i = 0;
+    
+    while (i < rankings.length) {
+      const currentScore = rankings[i].score;
+      const tiedTeams = rankings.filter(r => r.score === currentScore);
+      
+      if (tiedTeams.length === 4) {
+        // Alle gleich: Durchschnitt der Coins
+        const totalCoins = tiedTeams.reduce((sum, t, idx) => sum + placementCoins[idx], 0);
+        const coinsPerTeam = Math.round(totalCoins / tiedTeams.length);
+        for (const team of tiedTeams) {
+          coinDistribution[team.teamIdx] = coinsPerTeam;
+        }
+        break;
+      } else if (tiedTeams.length > 1) {
+        // Mehrere Teams gleich: Coins addieren und teilen
+        let totalCoins = 0;
+        for (let j = 0; j < tiedTeams.length; j++) {
+          totalCoins += placementCoins[currentRank + j] || 0;
+        }
+        const coinsPerTeam = Math.floor(totalCoins / tiedTeams.length);
+        
+        for (const team of tiedTeams) {
+          coinDistribution[team.teamIdx] = coinsPerTeam;
+        }
+        
+        currentRank += tiedTeams.length;
+        i += tiedTeams.length;
+      } else {
+        // Kein Gleichstand
+        coinDistribution[rankings[i].teamIdx] = placementCoins[currentRank] || 0;
+        currentRank++;
+        i++;
+      }
+    }
+  }
+
   // Teams in DB speichern
   const teamInserts = Array.from(teamsByIndex.entries()).map(([teamIdx, team]) => ({
     match_id,
@@ -345,7 +403,7 @@ async function handleDuoMatch(body: any) {
     captain_discord_id: String(team.captain?.discord_id ?? ""),
     member_discord_id: String(team.member?.discord_id ?? ""),
     score: team.score,
-    coins_earned: team.coins,
+    coins_earned: coinDistribution[teamIdx] ?? 0,
   }));
 
   const { error: teamsErr } = await supabaseAdmin.from("duo_teams").insert(teamInserts);
@@ -353,7 +411,8 @@ async function handleDuoMatch(body: any) {
 
   // ✅ Coins und Spiele-Anzahl aktualisieren
   for (const player of players) {
-    const coinsEarned = Number(player.coins_earned ?? 0);
+    const teamIdx = Number(player.team_index ?? 0);
+    const coinsEarned = coinDistribution[teamIdx] ?? 0;
     const playerId = String(player.discord_id);
     
     // Aktuelle Werte holen
@@ -647,7 +706,6 @@ export async function POST(req: Request) {
           points_unschuldig: 1,
           started_at: null,
           ended_at: null,
-          skipped: false,
           aborted: Boolean(r.aborted),
           aborted_reason: r.aborted_reason ?? null,
         });
@@ -741,23 +799,42 @@ export async function POST(req: Request) {
       if (placement) anyPlacement = true;
     }
 
-    const scaled: Record<string, number> = {};
-    for (const s of sorted) {
-      const id = s.discord_id;
-      let d = baseDeltaMap.get(id) ?? 0;
+    // ✅ Bei Abbruch wegen Violation: Violation-Spieler bekommt -30 Elo, andere 0
+    let finalDeltas: Record<string, number>;
+    
+    if (aborted_reason && body.violation?.discord_id) {
+      const violationId = String(body.violation.discord_id);
+      finalDeltas = {};
+      
+      for (const id of ids) {
+        if (id === violationId) {
+          // Violation-Spieler: -30 Elo (4. Platz Strafe)
+          finalDeltas[id] = -30;
+        } else {
+          // Andere Spieler: 0 Elo
+          finalDeltas[id] = 0;
+        }
+      }
+    } else {
+      // Normales Spiel: Elo-Berechnung wie gewohnt
+      const scaled: Record<string, number> = {};
+      for (const s of sorted) {
+        const id = s.discord_id;
+        let d = baseDeltaMap.get(id) ?? 0;
 
-      const others = ids.filter((x: string) => x !== id);
-      const avgOthers = (eloBefore[others[0]] + eloBefore[others[1]] + eloBefore[others[2]]) / 3;
+        const others = ids.filter((x: string) => x !== id);
+        const avgOthers = (eloBefore[others[0]] + eloBefore[others[1]] + eloBefore[others[2]]) / 3;
 
-      d = applyLobbyMultiplierFloat(d, eloBefore[id], avgOthers);
-      if (isPlacement[id]) d = d * PLACEMENT_MULT;
+        d = applyLobbyMultiplierFloat(d, eloBefore[id], avgOthers);
+        if (isPlacement[id]) d = d * PLACEMENT_MULT;
 
-      scaled[id] = d;
+        scaled[id] = d;
+      }
+
+      finalDeltas = anyPlacement
+        ? Object.fromEntries(ids.map((id: string) => [id, Math.round(scaled[id] ?? 0)]))
+        : normalizeZeroSumAndRound(scaled);
     }
-
-    const finalDeltas: Record<string, number> = anyPlacement
-      ? Object.fromEntries(ids.map((id: string) => [id, Math.round(scaled[id] ?? 0)]))
-      : normalizeZeroSumAndRound(scaled);
 
     const resultsRows = sorted.map((s, idx) => ({
       match_id,
