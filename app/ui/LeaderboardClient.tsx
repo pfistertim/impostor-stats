@@ -72,7 +72,7 @@ function PlacementPill({ p }: { p: number }) {
 
   return (
     <span className={`inline-flex h-7 w-7 items-center justify-center rounded-md border text-xs font-semibold ${cls}`}>
-      {p}
+      {p % 1 === 0.5 ? `${p}.` : `${p}`}
     </span>
   );
 }

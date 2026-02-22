@@ -166,6 +166,66 @@ function getBadgeEffects(tier: "unranked" | "eisen" | "bronze" | "silver" | "gol
 }
 
 function PlacementPill({ p }: { p: number }) {
+  // Prüfe ob es eine .5 Platzierung ist
+  const isHalf = p % 1 === 0.5;
+  const lowerPlace = Math.floor(p);
+  
+  if (isHalf) {
+    // Mische die Farben der beiden Plätze
+    let mixedCls = "";
+    let mixedStyle: any = {};
+    
+    if (p === 1.5) {
+      // Gold + Silber Mix
+      mixedCls = "text-yellow-50 border-yellow-300/60 shadow-lg shadow-yellow-400/25";
+      mixedStyle = {
+        backgroundImage: 'linear-gradient(135deg, #fbbf24, #f59e0b, #d1d5db, #9ca3af, #fbbf24)',
+        textShadow: '0 0 2px rgba(0,0,0,0.8), 0 0 4px rgba(0,0,0,0.6)',
+      };
+    } else if (p === 2.5) {
+      // Silber + Bronze Mix
+      mixedCls = "text-gray-50 border-gray-400/60 shadow-md shadow-gray-500/20";
+      mixedStyle = {
+        backgroundImage: 'linear-gradient(135deg, #d1d5db, #9ca3af, #b45309, #d97706, #d1d5db)',
+        textShadow: '0 0 2px rgba(0,0,0,0.8), 0 0 4px rgba(0,0,0,0.6)',
+      };
+    } else if (p === 3.5) {
+      // Bronze + Rot Mix
+      mixedCls = "text-amber-50 border-amber-700/60 shadow-md shadow-amber-800/20";
+      mixedStyle = {
+        backgroundImage: 'linear-gradient(135deg, #b45309, #d97706, #991b1b, #7f1d1d, #b45309)',
+        textShadow: '0 0 2px rgba(0,0,0,0.8), 0 0 4px rgba(0,0,0,0.6)',
+      };
+    } else {
+      // Fallback für andere .5 Platzierungen
+      mixedCls = "text-red-50 border-red-700/60 shadow-md shadow-red-800/20";
+      mixedStyle = {
+        backgroundImage: 'linear-gradient(135deg, #991b1b, #7f1d1d, #450a0a, #7f1d1d, #991b1b)',
+        textShadow: '0 0 2px rgba(0,0,0,0.8), 0 0 4px rgba(0,0,0,0.6)',
+      };
+    }
+    
+    // Verwende Animation des niedrigeren Platzes
+    const animationCls = lowerPlace === 1 ? "animate-subtle-pulse animate-gold-flow" : 
+                        lowerPlace === 2 ? "animate-silver-flow" :
+                        lowerPlace === 3 ? "animate-bronze-flow" : "";
+    
+    return (
+      <span
+        className={[
+          "inline-flex items-center justify-center rounded-md border font-semibold",
+          "h-8 w-8 text-xs transition-all duration-300 hover:scale-110",
+          animationCls,
+          mixedCls,
+        ].join(" ")}
+        style={mixedStyle}
+      >
+        {p}.
+      </span>
+    );
+  }
+  
+  // Normale Platzierung (1, 2, 3, 4)
   const cls =
     p === 1
       ? "text-yellow-50 border-yellow-400/60 shadow-lg shadow-yellow-500/30"
@@ -207,6 +267,66 @@ function PlacementPill({ p }: { p: number }) {
 }
 
 function DuoPlacementPill({ p }: { p: number }) {
+  // Prüfe ob es eine .5 Platzierung ist
+  const isHalf = p % 1 === 0.5;
+  const lowerPlace = Math.floor(p);
+  
+  if (isHalf) {
+    // Mische die Farben der beiden Plätze
+    let mixedCls = "";
+    let mixedStyle: any = {};
+    
+    if (p === 1.5) {
+      // Gold + Silber Mix
+      mixedCls = "text-yellow-50 border-yellow-300/60 shadow-lg shadow-yellow-400/25";
+      mixedStyle = {
+        backgroundImage: 'linear-gradient(135deg, #fbbf24, #f59e0b, #d1d5db, #9ca3af, #fbbf24)',
+        textShadow: '0 0 2px rgba(0,0,0,0.8), 0 0 4px rgba(0,0,0,0.6)',
+      };
+    } else if (p === 2.5) {
+      // Silber + Bronze Mix
+      mixedCls = "text-gray-50 border-gray-400/60 shadow-md shadow-gray-500/20";
+      mixedStyle = {
+        backgroundImage: 'linear-gradient(135deg, #d1d5db, #9ca3af, #b45309, #d97706, #d1d5db)',
+        textShadow: '0 0 2px rgba(0,0,0,0.8), 0 0 4px rgba(0,0,0,0.6)',
+      };
+    } else if (p === 3.5) {
+      // Bronze + Rot Mix
+      mixedCls = "text-amber-50 border-amber-700/60 shadow-md shadow-amber-800/20";
+      mixedStyle = {
+        backgroundImage: 'linear-gradient(135deg, #b45309, #d97706, #991b1b, #7f1d1d, #b45309)',
+        textShadow: '0 0 2px rgba(0,0,0,0.8), 0 0 4px rgba(0,0,0,0.6)',
+      };
+    } else {
+      // Fallback für andere .5 Platzierungen
+      mixedCls = "text-red-50 border-red-700/60 shadow-md shadow-red-800/20";
+      mixedStyle = {
+        backgroundImage: 'linear-gradient(135deg, #991b1b, #7f1d1d, #450a0a, #7f1d1d, #991b1b)',
+        textShadow: '0 0 2px rgba(0,0,0,0.8), 0 0 4px rgba(0,0,0,0.6)',
+      };
+    }
+    
+    // Verwende Animation des niedrigeren Platzes
+    const animationCls = lowerPlace === 1 ? "animate-subtle-pulse animate-gold-flow" : 
+                        lowerPlace === 2 ? "animate-silver-flow" :
+                        lowerPlace === 3 ? "animate-bronze-flow" : "";
+    
+    return (
+      <span
+        className={[
+          "inline-flex items-center justify-center rounded-md border font-semibold",
+          "h-8 w-8 text-xs transition-all duration-300 hover:scale-110",
+          animationCls,
+          mixedCls,
+        ].join(" ")}
+        style={mixedStyle}
+      >
+        {p}.
+      </span>
+    );
+  }
+  
+  // Normale Platzierung (1, 2, 3, 4)
   const cls =
     p === 1
       ? "text-yellow-50 border-yellow-400/60 shadow-lg shadow-yellow-500/30"
@@ -409,20 +529,97 @@ export default function Home() {
         if (ids.length > 0) {
           const { data: results, error: rErr } = await supabase
             .from("match_results")
-            .select("discord_id,placement,matches!inner(started_at,mode)")
+            .select("discord_id,placement,total_points,match_id,matches!inner(started_at,mode,aborted_reason)")
             .in("discord_id", ids)
             .eq("matches.mode", "ranked")
-            .order("started_at", { foreignTable: "matches", ascending: false })
-            .limit(4000);
+            .limit(4000); // ✅ Lade ohne Sortierung, sortiere in JS
 
           if (rErr) throw new Error(rErr.message);
 
+          // ✅ Sortiere in JavaScript nach started_at
+          const sortedResults = (results ?? []).sort((a: any, b: any) => {
+            const metaA = Array.isArray(a.matches) ? a.matches[0] : a.matches;
+            const metaB = Array.isArray(b.matches) ? b.matches[0] : b.matches;
+            const dateA = metaA?.started_at;
+            const dateB = metaB?.started_at;
+            if (!dateA || !dateB) return 0;
+            return new Date(dateB).getTime() - new Date(dateA).getTime();
+          });
+
+          // ✅ Gruppiere nach Match-ID um tatsächliche Platzierungen zu berechnen
+          const byMatch: Record<number, any[]> = {};
+          for (const row of sortedResults) {
+            const matchId = Number((row as any).match_id);
+            if (!byMatch[matchId]) byMatch[matchId] = [];
+            byMatch[matchId].push(row);
+          }
+
+          // ✅ Lade ALLE Spieler für diese Matches (nicht nur Top 200)
+          const matchIds = Object.keys(byMatch).map(Number);
+          const { data: allPlayersInMatches } = await supabase
+            .from("match_results")
+            .select("match_id,discord_id,total_points,placement")
+            .in("match_id", matchIds);
+
+          // Ersetze byMatch mit vollständigen Daten
+          const completeByMatch: Record<number, any[]> = {};
+          for (const row of allPlayersInMatches ?? []) {
+            const matchId = Number(row.match_id);
+            if (!completeByMatch[matchId]) completeByMatch[matchId] = [];
+            completeByMatch[matchId].push(row);
+          }
+
+          // ✅ Berechne tatsächliche Platzierungen pro Match
+          const actualPlacementsByMatch: Record<number, Map<string, number>> = {};
+          for (const [matchId, players] of Object.entries(completeByMatch)) {
+            const playersData = players.map((p: any) => ({
+              discord_id: String(p.discord_id),
+              total_points: Number(p.total_points ?? 0),
+              placement: Number(p.placement ?? 0),
+            }));
+            
+            // Sortiere nach Punkten
+            const sorted = [...playersData].sort((a, b) => b.total_points - a.total_points);
+            
+            const placementMap = new Map<string, number>();
+            let currentRank = 1;
+            let i = 0;
+            
+            while (i < sorted.length) {
+              const currentPoints = sorted[i].total_points;
+              const tiedPlayers = sorted.filter((p, idx) => idx >= i && p.total_points === currentPoints);
+              const tiedCount = tiedPlayers.length;
+              
+              if (tiedCount > 1) {
+                const ranksSum = Array.from({ length: tiedCount }, (_, idx) => currentRank + idx).reduce((a, b) => a + b, 0);
+                const avgRank = ranksSum / tiedCount;
+                tiedPlayers.forEach(p => placementMap.set(p.discord_id, avgRank));
+                currentRank += tiedCount;
+                i += tiedCount;
+              } else {
+                placementMap.set(sorted[i].discord_id, currentRank);
+                currentRank++;
+                i++;
+              }
+            }
+            
+            actualPlacementsByMatch[Number(matchId)] = placementMap;
+          }
+
           const byPlayer: Record<string, number[]> = {};
-          for (const row of results ?? []) {
+          for (const row of sortedResults) {
             const did = String((row as any).discord_id);
-            const placement = Number((row as any).placement);
+            const matchId = Number((row as any).match_id);
+            
+            // ✅ Überspringe abgebrochene Matches
+            const matchData = Array.isArray((row as any).matches) ? (row as any).matches[0] : (row as any).matches;
+            if (matchData?.aborted_reason) continue;
+            
+            // ✅ Verwende tatsächliche Platzierung
+            const actualPlacement = actualPlacementsByMatch[matchId]?.get(did) ?? Number((row as any).placement);
+            
             if (!byPlayer[did]) byPlayer[did] = [];
-            if (byPlayer[did].length < 5) byPlayer[did].push(placement);
+            if (byPlayer[did].length < 5) byPlayer[did].push(actualPlacement);
           }
 
           rankedWithPlacements = rankedTop200.map((p) => ({
@@ -456,7 +653,7 @@ export default function Home() {
           // Hole alle Duo-Matches mit Teams
           const { data: duoMatches, error: duoErr } = await supabase
             .from("matches")
-            .select("id,started_at,duo_teams(team_index,captain_discord_id,member_discord_id,score)")
+            .select("id,started_at,aborted_reason,duo_teams(team_index,captain_discord_id,member_discord_id,score)")
             .eq("mode", "duo")
             .order("started_at", { ascending: false })
             .limit(500);
@@ -470,17 +667,52 @@ export default function Home() {
             const playerPlacements: Record<string, number[]> = {};
             
             for (const match of duoMatches ?? []) {
+              // ✅ Überspringe abgebrochene Matches
+              if ((match as any).aborted_reason) continue;
+              
               const teams = (match as any).duo_teams ?? [];
               if (teams.length === 0) continue;
               
-              // Sortiere Teams nach Score (höchster = Platz 1)
-              const sortedTeams = [...teams].sort((a: any, b: any) => b.score - a.score);
+              // ✅ Berechne tatsächliche Platzierungen basierend auf Scores
+              const teamData = teams.map((t: any, idx: number) => ({
+                team_index: t.team_index,
+                captain_discord_id: String(t.captain_discord_id),
+                member_discord_id: String(t.member_discord_id),
+                score: Number(t.score ?? 0),
+                original_placement: idx + 1,
+              }));
               
-              // Vergebe Platzierungen
-              sortedTeams.forEach((team: any, idx: number) => {
-                const placement = idx + 1;
-                const captain = String(team.captain_discord_id);
-                const member = String(team.member_discord_id);
+              // Sortiere nach Score
+              const sorted = [...teamData].sort((a, b) => b.score - a.score);
+              
+              // Berechne tatsächliche Platzierungen
+              const placementMap = new Map<number, number>(); // team_index -> actual placement
+              let currentRank = 1;
+              let i = 0;
+              
+              while (i < sorted.length) {
+                const currentScore = sorted[i].score;
+                const tiedTeams = sorted.filter((t, idx) => idx >= i && t.score === currentScore);
+                const tiedCount = tiedTeams.length;
+                
+                if (tiedCount > 1) {
+                  const ranksSum = Array.from({ length: tiedCount }, (_, idx) => currentRank + idx).reduce((a, b) => a + b, 0);
+                  const avgRank = ranksSum / tiedCount;
+                  tiedTeams.forEach(t => placementMap.set(t.team_index, avgRank));
+                  currentRank += tiedCount;
+                  i += tiedCount;
+                } else {
+                  placementMap.set(sorted[i].team_index, currentRank);
+                  currentRank++;
+                  i++;
+                }
+              }
+              
+              // Vergebe Platzierungen an Spieler
+              for (const team of teamData) {
+                const placement = placementMap.get(team.team_index) ?? team.original_placement;
+                const captain = team.captain_discord_id;
+                const member = team.member_discord_id;
                 
                 // Nur für Spieler im Top 100
                 if (duoIds.includes(captain)) {
@@ -496,7 +728,7 @@ export default function Home() {
                     playerPlacements[member].push(placement);
                   }
                 }
-              });
+              }
             }
 
             console.log("Player placements:", playerPlacements);

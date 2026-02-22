@@ -29,6 +29,7 @@ type RecentMatchRow = {
   placement: number | null;
   elo_delta: number | null;
   coins_earned: number | null;
+  ranked_games_played?: number | null; // ✅ Für Unranked-Check in Haupttabelle
 
   // Supabase join -> kann Object oder Array sein
   matches: {
@@ -71,6 +72,8 @@ type MatchPlayerRow = {
   total_points: number;
   elo_delta: number;
   duo_coins_delta?: number;
+  ranked_games_played?: number; // ✅ Für Unranked-Check
+  team_index?: number; // ✅ Für Duo-Modus: Team-Nummer (0-basiert)
 };
 
 // raw from supabase: categories join can arrive as array
@@ -135,6 +138,74 @@ function formatCategoryName(name: string | null) {
     .split('_')
     .map(word => word.charAt(0).toUpperCase() + word.slice(1))
     .join(' & ');
+}
+
+function formatAbortReason(reason: string | null) {
+  if (!reason) return "Abgebrochen";
+  
+  // Parse violation:xxx Format
+  if (reason.startsWith("violation:")) {
+    const type = reason.replace("violation:", "");
+    const map: Record<string, string> = {
+      afk: "AFK",
+      left_voice: "Sprachchat verlassen",
+      unangemessen: "Unangemessenes Verhalten",
+    };
+    return map[type] ?? "Verstoß";
+  }
+  
+  return "Abgebrochen";
+}
+
+/**
+ * Berechnet die tatsächliche Platzierung basierend auf Punktzahlen.
+ * Wenn mehrere Spieler die gleiche Punktzahl haben, bekommen sie eine gemeinsame Platzierung.
+ * 
+ * Beispiele:
+ * - [5,5,3,2] -> [1.5, 1.5, 3, 4] (Platz 1 und 2 teilen sich -> 1.5)
+ * - [5,3,3,2] -> [1, 2.5, 2.5, 4] (Platz 2 und 3 teilen sich -> 2.5)
+ * - [5,3,2,2] -> [1, 2, 3.5, 3.5] (Platz 3 und 4 teilen sich -> 3.5)
+ * - [5,5,5,2] -> [2, 2, 2, 4] (Platz 1,2,3 teilen sich -> 2)
+ * - [5,3,3,3] -> [1, 3, 3, 3] (Platz 2,3,4 teilen sich -> 3)
+ * - [5,5,5,5] -> [2.5, 2.5, 2.5, 2.5] (Alle teilen sich -> 2.5)
+ */
+function calculateActualPlacement(players: { total_points: number; placement: number }[]): Map<number, number> {
+  // Sortiere nach Punkten (höchste zuerst)
+  const sorted = [...players].sort((a, b) => b.total_points - a.total_points);
+  
+  const placementMap = new Map<number, number>(); // original placement -> actual placement
+  
+  let currentRank = 1;
+  let i = 0;
+  
+  while (i < sorted.length) {
+    const currentPoints = sorted[i].total_points;
+    
+    // Finde alle Spieler mit gleicher Punktzahl
+    const tiedPlayers = sorted.filter((p, idx) => idx >= i && p.total_points === currentPoints);
+    const tiedCount = tiedPlayers.length;
+    
+    if (tiedCount > 1) {
+      // Mehrere Spieler mit gleicher Punktzahl -> berechne Durchschnitt
+      const ranksSum = Array.from({ length: tiedCount }, (_, idx) => currentRank + idx).reduce((a, b) => a + b, 0);
+      const avgRank = ranksSum / tiedCount;
+      
+      // Setze für alle gebundenen Spieler die gleiche Platzierung
+      tiedPlayers.forEach(p => {
+        placementMap.set(p.placement, avgRank);
+      });
+      
+      currentRank += tiedCount;
+      i += tiedCount;
+    } else {
+      // Einzelner Spieler
+      placementMap.set(sorted[i].placement, currentRank);
+      currentRank++;
+      i++;
+    }
+  }
+  
+  return placementMap;
 }
 
 /* ===================== RANK SYSTEM ===================== */
@@ -301,6 +372,67 @@ function getBadgeEffects(tier: "unranked" | "eisen" | "bronze" | "silver" | "gol
 }
 
 function PlacementPill({ p }: { p: number }) {
+  // Prüfe ob es eine .5 Platzierung ist
+  const isHalf = p % 1 === 0.5;
+  const lowerPlace = Math.floor(p);
+  const upperPlace = Math.ceil(p);
+  
+  if (isHalf) {
+    // Mische die Farben der beiden Plätze
+    let mixedCls = "";
+    let mixedStyle: any = {};
+    
+    if (p === 1.5) {
+      // Gold + Silber Mix
+      mixedCls = "text-yellow-50 border-yellow-300/60 shadow-lg shadow-yellow-400/25";
+      mixedStyle = {
+        backgroundImage: 'linear-gradient(135deg, #fbbf24, #f59e0b, #d1d5db, #9ca3af, #fbbf24)',
+        textShadow: '0 0 2px rgba(0,0,0,0.8), 0 0 4px rgba(0,0,0,0.6)',
+      };
+    } else if (p === 2.5) {
+      // Silber + Bronze Mix
+      mixedCls = "text-gray-50 border-gray-400/60 shadow-md shadow-gray-500/20";
+      mixedStyle = {
+        backgroundImage: 'linear-gradient(135deg, #d1d5db, #9ca3af, #b45309, #d97706, #d1d5db)',
+        textShadow: '0 0 2px rgba(0,0,0,0.8), 0 0 4px rgba(0,0,0,0.6)',
+      };
+    } else if (p === 3.5) {
+      // Bronze + Rot Mix
+      mixedCls = "text-amber-50 border-amber-700/60 shadow-md shadow-amber-800/20";
+      mixedStyle = {
+        backgroundImage: 'linear-gradient(135deg, #b45309, #d97706, #991b1b, #7f1d1d, #b45309)',
+        textShadow: '0 0 2px rgba(0,0,0,0.8), 0 0 4px rgba(0,0,0,0.6)',
+      };
+    } else {
+      // Fallback für andere .5 Platzierungen (z.B. 4.5, 5.5, etc.)
+      mixedCls = "text-red-50 border-red-700/60 shadow-md shadow-red-800/20";
+      mixedStyle = {
+        backgroundImage: 'linear-gradient(135deg, #991b1b, #7f1d1d, #450a0a, #7f1d1d, #991b1b)',
+        textShadow: '0 0 2px rgba(0,0,0,0.8), 0 0 4px rgba(0,0,0,0.6)',
+      };
+    }
+    
+    // Verwende Animation des niedrigeren Platzes
+    const animationCls = lowerPlace === 1 ? "animate-subtle-pulse animate-gold-flow" : 
+                        lowerPlace === 2 ? "animate-silver-flow" :
+                        lowerPlace === 3 ? "animate-bronze-flow" : "";
+    
+    return (
+      <span
+        className={[
+          "inline-flex items-center justify-center rounded-md border font-semibold",
+          "h-8 w-8 text-xs transition-all duration-300 hover:scale-110",
+          animationCls,
+          mixedCls,
+        ].join(" ")}
+        style={mixedStyle}
+      >
+        {p}.
+      </span>
+    );
+  }
+  
+  // Normale Platzierung (1, 2, 3, 4)
   const cls =
     p === 1
       ? "text-yellow-50 border-yellow-400/60 shadow-lg shadow-yellow-500/30"
@@ -363,6 +495,7 @@ export default function PlayerClient({ discordId }: { discordId: string }) {
   const [roundsByMatch, setRoundsByMatch] = useState<Record<number, RoundRow[]>>({});
   const [roundsLoading, setRoundsLoading] = useState<Record<number, boolean>>({});
   const [playersByMatch, setPlayersByMatch] = useState<Record<number, MatchPlayerRow[]>>({});
+  const [violationsByMatch, setViolationsByMatch] = useState<Record<number, { player_name: string; type: string } | null>>({});
 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -433,10 +566,9 @@ export default function PlayerClient({ discordId }: { discordId: string }) {
       // 2) letzte 20 matches (ranked + zwanglos aus match_results)
       const m = await supabase
         .from("match_results")
-        .select("match_id,total_points,placement,elo_delta,matches!inner(id,started_at,ended_at,mode)")
+        .select("match_id,total_points,placement,elo_delta,matches!inner(id,started_at,ended_at,mode,aborted_reason)")
         .eq("discord_id", id)
-        .order("started_at", { foreignTable: "matches", ascending: false })
-        .limit(20);
+        .limit(100); // ✅ Lade mehr, sortiere dann in JS
 
       if (m.error) {
         if (!cancelled) {
@@ -446,13 +578,23 @@ export default function PlayerClient({ discordId }: { discordId: string }) {
         return;
       }
 
+      // ✅ Sortiere in JavaScript nach started_at
+      const sortedMatchResults = (m.data ?? []).sort((a: any, b: any) => {
+        const metaA = Array.isArray(a.matches) ? a.matches[0] : a.matches;
+        const metaB = Array.isArray(b.matches) ? b.matches[0] : b.matches;
+        const dateA = metaA?.started_at;
+        const dateB = metaB?.started_at;
+        if (!dateA || !dateB) return 0;
+        return new Date(dateB).getTime() - new Date(dateA).getTime();
+      }).slice(0, 20); // Nur die neuesten 20
+
       // 2b) Duo matches - Alternative: Lade separat
       console.log("Loading duo matches for player ID:", id, "Type:", typeof id);
       
       // Erst alle Duo-Matches laden
       const allDuoMatchesSimple = await supabase
         .from("matches")
-        .select("id,started_at,ended_at,mode")
+        .select("id,started_at,ended_at,mode,aborted_reason")
         .eq("mode", "duo")
         .order("started_at", { ascending: false })
         .limit(100);
@@ -519,6 +661,7 @@ export default function PlayerClient({ discordId }: { discordId: string }) {
                   started_at: match.started_at,
                   ended_at: match.ended_at,
                   mode: match.mode,
+                  aborted_reason: match.aborted_reason,
                 },
                 allTeams: teams,
               });
@@ -534,7 +677,7 @@ export default function PlayerClient({ discordId }: { discordId: string }) {
       const allMatches: any[] = [];
 
       // Füge match_results hinzu
-      for (const row of m.data ?? []) {
+      for (const row of sortedMatchResults) {
         const meta = Array.isArray(row.matches) ? row.matches[0] : row.matches;
         allMatches.push({
           match_id: row.match_id,
@@ -577,7 +720,166 @@ export default function PlayerClient({ discordId }: { discordId: string }) {
         return new Date(dateB).getTime() - new Date(dateA).getTime();
       }).slice(0, 20); // Nur die neuesten 20
 
-      console.log("Combined matches:", sortedMatches);
+      // ✅ Berechne tatsächliche Platzierungen für alle Matches
+      const matchIdsToFix = sortedMatches.filter((m: any) => !m.isDuo).map((m: any) => m.match_id);
+      
+      if (matchIdsToFix.length > 0) {
+        // Lade alle Spieler für diese Matches
+        const { data: allPlayersInMatches } = await supabase
+          .from("match_results")
+          .select("match_id,discord_id,total_points,placement")
+          .in("match_id", matchIdsToFix);
+
+        if (allPlayersInMatches) {
+          // Gruppiere nach Match
+          const playersByMatch: Record<number, any[]> = {};
+          for (const p of allPlayersInMatches) {
+            const mid = p.match_id;
+            if (!playersByMatch[mid]) playersByMatch[mid] = [];
+            playersByMatch[mid].push(p);
+          }
+
+          // Berechne tatsächliche Platzierungen pro Match
+          const actualPlacementsByMatch: Record<number, Map<string, number>> = {};
+          for (const [matchId, players] of Object.entries(playersByMatch)) {
+            const playersData = players.map((p: any) => ({
+              discord_id: String(p.discord_id),
+              total_points: Number(p.total_points ?? 0),
+              placement: Number(p.placement ?? 0),
+            }));
+            
+            const sorted = [...playersData].sort((a, b) => b.total_points - a.total_points);
+            const placementMap = new Map<string, number>();
+            let currentRank = 1;
+            let i = 0;
+            
+            while (i < sorted.length) {
+              const currentPoints = sorted[i].total_points;
+              const tiedPlayers = sorted.filter((p, idx) => idx >= i && p.total_points === currentPoints);
+              const tiedCount = tiedPlayers.length;
+              
+              if (tiedCount > 1) {
+                const ranksSum = Array.from({ length: tiedCount }, (_, idx) => currentRank + idx).reduce((a, b) => a + b, 0);
+                const avgRank = ranksSum / tiedCount;
+                tiedPlayers.forEach(p => placementMap.set(p.discord_id, avgRank));
+                currentRank += tiedCount;
+                i += tiedCount;
+              } else {
+                placementMap.set(sorted[i].discord_id, currentRank);
+                currentRank++;
+                i++;
+              }
+            }
+            
+            actualPlacementsByMatch[Number(matchId)] = placementMap;
+          }
+
+          // Aktualisiere Platzierungen in sortedMatches
+          sortedMatches.forEach((match: any) => {
+            if (!match.isDuo && actualPlacementsByMatch[match.match_id]) {
+              const actualPlacement = actualPlacementsByMatch[match.match_id].get(id);
+              if (actualPlacement !== undefined) {
+                match.placement = actualPlacement;
+              }
+            }
+          });
+        }
+      }
+
+      // ✅ Berechne ranked_games_played für jedes Match (für Unranked-Check)
+      const rankedMatchesForPlayer = sortedMatches.filter((m: any) => {
+        const meta = m.matches;
+        return meta?.mode === "ranked";
+      });
+
+      // Für jedes Ranked-Match: Zähle wie viele Ranked-Matches der Spieler VOR diesem Match hatte
+      for (const match of rankedMatchesForPlayer) {
+        const matchDate = match.matches?.started_at ? new Date(match.matches.started_at) : null;
+        
+        if (matchDate) {
+          const { count } = await supabase
+            .from("match_results")
+            .select("match_id,matches!inner(started_at,mode)", { count: "exact", head: true })
+            .eq("discord_id", id)
+            .eq("matches.mode", "ranked")
+            .lt("matches.started_at", matchDate.toISOString());
+          
+          match.ranked_games_played = Number(count ?? 0);
+        }
+      }
+
+      // Berechne auch für Duo-Matches die tatsächlichen Platzierungen
+      const duoMatchIds = sortedMatches.filter((m: any) => m.isDuo).map((m: any) => m.match_id);
+      
+      if (duoMatchIds.length > 0) {
+        const { data: allDuoTeams } = await supabase
+          .from("duo_teams")
+          .select("match_id,team_index,captain_discord_id,member_discord_id,score")
+          .in("match_id", duoMatchIds);
+
+        if (allDuoTeams) {
+          const teamsByMatch: Record<number, any[]> = {};
+          for (const t of allDuoTeams) {
+            const mid = t.match_id;
+            if (!teamsByMatch[mid]) teamsByMatch[mid] = [];
+            teamsByMatch[mid].push(t);
+          }
+
+          const actualPlacementsByMatch: Record<number, Map<number, number>> = {};
+          for (const [matchId, teams] of Object.entries(teamsByMatch)) {
+            const teamData = teams.map((t: any, idx: number) => ({
+              team_index: t.team_index,
+              score: Number(t.score ?? 0),
+              original_placement: idx + 1,
+            }));
+            
+            const sorted = [...teamData].sort((a, b) => b.score - a.score);
+            const placementMap = new Map<number, number>();
+            let currentRank = 1;
+            let i = 0;
+            
+            while (i < sorted.length) {
+              const currentScore = sorted[i].score;
+              const tiedTeams = sorted.filter((t, idx) => idx >= i && t.score === currentScore);
+              const tiedCount = tiedTeams.length;
+              
+              if (tiedCount > 1) {
+                const ranksSum = Array.from({ length: tiedCount }, (_, idx) => currentRank + idx).reduce((a, b) => a + b, 0);
+                const avgRank = ranksSum / tiedCount;
+                tiedTeams.forEach(t => placementMap.set(t.team_index, avgRank));
+                currentRank += tiedCount;
+                i += tiedCount;
+              } else {
+                placementMap.set(sorted[i].team_index, currentRank);
+                currentRank++;
+                i++;
+              }
+            }
+            
+            actualPlacementsByMatch[Number(matchId)] = placementMap;
+          }
+
+          // Aktualisiere Platzierungen in sortedMatches
+          sortedMatches.forEach((match: any) => {
+            if (match.isDuo) {
+              // Finde team_index für diesen Spieler
+              const teams = teamsByMatch[match.match_id] ?? [];
+              const playerTeam = teams.find((t: any) => 
+                String(t.captain_discord_id) === id || String(t.member_discord_id) === id
+              );
+              
+              if (playerTeam && actualPlacementsByMatch[match.match_id]) {
+                const actualPlacement = actualPlacementsByMatch[match.match_id].get(playerTeam.team_index);
+                if (actualPlacement !== undefined) {
+                  match.placement = actualPlacement;
+                }
+              }
+            }
+          });
+        }
+      }
+
+      console.log("Combined matches with actual placements:", sortedMatches);
 
       // 3) Zwanglos 1.-Plätze zählen (count-only)
       const cf = await supabase
@@ -744,6 +1046,32 @@ export default function PlayerClient({ discordId }: { discordId: string }) {
     const meta = Array.isArray((matchMeta as any)?.matches) ? (matchMeta as any).matches[0] : (matchMeta as any)?.matches;
     console.log("Match mode for", matchId, ":", meta?.mode);
 
+    // ✅ Lade Violation-Daten (falls vorhanden)
+    if (meta?.aborted_reason && meta.aborted_reason.startsWith("violation:")) {
+      const { data: violationData } = await supabase
+        .from("player_violations")
+        .select("discord_id,violation_type")
+        .eq("match_id", matchId)
+        .maybeSingle();
+
+      if (violationData) {
+        // Hole Spielername
+        const { data: playerData } = await supabase
+          .from("players")
+          .select("last_name")
+          .eq("discord_id", violationData.discord_id)
+          .maybeSingle();
+
+        setViolationsByMatch((prev) => ({
+          ...prev,
+          [matchId]: {
+            player_name: playerData?.last_name ?? violationData.discord_id,
+            type: violationData.violation_type,
+          },
+        }));
+      }
+    }
+
     // Test: Lade erst mit allen Spalten
     const rTest = await supabase
       .from("match_rounds")
@@ -874,7 +1202,47 @@ export default function PlayerClient({ discordId }: { discordId: string }) {
         placement: Number(p.placement ?? 0),
         total_points: Number(p.total_points ?? 0),
         elo_delta: Number(p.elo_delta ?? 0),
+        ranked_games_played: 0, // ✅ Wird gleich geladen
       }));
+
+      // ✅ Lade ranked_games_played ZUM ZEITPUNKT DES MATCHES
+      // Zähle wie viele Ranked-Matches der Spieler VOR diesem Match hatte
+      const matchDate = meta?.started_at ? new Date(meta.started_at) : null;
+      
+      console.log("Match date for ranked_games_played calculation:", matchDate);
+      
+      const playersStatsAtMatchTime = new Map<string, number>();
+      
+      if (matchDate) {
+        for (const playerId of allPlayerIds) {
+          // Zähle Ranked-Matches VOR diesem Match
+          const { count } = await supabase
+            .from("match_results")
+            .select("match_id,matches!inner(started_at,mode)", { count: "exact", head: true })
+            .eq("discord_id", playerId)
+            .eq("matches.mode", "ranked")
+            .lt("matches.started_at", matchDate.toISOString());
+          
+          const rankedGamesCount = Number(count ?? 0);
+          playersStatsAtMatchTime.set(playerId, rankedGamesCount);
+          console.log(`Player ${playerId} had ${rankedGamesCount} ranked games before this match`);
+        }
+      }
+
+      // ✅ Aktualisiere matchPlayers mit ranked_games_played zum Zeitpunkt des Matches
+      matchPlayers.forEach((p) => {
+        p.ranked_games_played = playersStatsAtMatchTime.get(p.discord_id) ?? 0;
+        console.log(`Setting ranked_games_played for ${p.player_name} (${p.discord_id}): ${p.ranked_games_played}`);
+      });
+
+      // ✅ Berechne tatsächliche Platzierungen basierend auf Punktzahlen
+      const actualPlacements = calculateActualPlacement(matchPlayers);
+      matchPlayers.forEach((p) => {
+        const actualPlacement = actualPlacements.get(p.placement);
+        if (actualPlacement !== undefined) {
+          p.placement = actualPlacement;
+        }
+      });
 
       setPlayersByMatch((prev) => ({ ...prev, [matchId]: matchPlayers }));
     }
@@ -883,7 +1251,7 @@ export default function PlayerClient({ discordId }: { discordId: string }) {
     if (meta?.mode === "duo") {
       const duoTeams = await supabase
         .from("duo_teams")
-        .select("captain_discord_id,member_discord_id,score,coins_earned")
+        .select("team_index,captain_discord_id,member_discord_id,score,coins_earned")
         .eq("match_id", matchId)
         .order("score", { ascending: false });
 
@@ -904,24 +1272,46 @@ export default function PlayerClient({ discordId }: { discordId: string }) {
         duoTeams.data.forEach((team: any, idx: number) => {
           const placement = idx + 1;
           const coinsEarned = Number(team.coins_earned ?? 0);
+          const score = Number(team.score ?? 0);
+          const teamIndex = Number(team.team_index ?? 0);
           
           duoMatchPlayers.push({
             discord_id: team.captain_discord_id,
             player_name: duoPlayerNames.get(team.captain_discord_id) ?? team.captain_discord_id,
             placement: placement,
-            total_points: Number(team.score ?? 0),
+            total_points: score,
             elo_delta: 0,
             duo_coins_delta: coinsEarned,
+            team_index: teamIndex,
           });
           
           duoMatchPlayers.push({
             discord_id: team.member_discord_id,
             player_name: duoPlayerNames.get(team.member_discord_id) ?? team.member_discord_id,
             placement: placement,
-            total_points: Number(team.score ?? 0),
+            total_points: score,
             elo_delta: 0,
             duo_coins_delta: coinsEarned,
+            team_index: teamIndex,
           });
+        });
+
+        // ✅ Berechne tatsächliche Platzierungen basierend auf Scores
+        // Gruppiere nach Team (beide Spieler haben gleiche Platzierung)
+        const teamScores: { total_points: number; placement: number }[] = [];
+        duoTeams.data.forEach((team: any, idx: number) => {
+          teamScores.push({
+            total_points: Number(team.score ?? 0),
+            placement: idx + 1,
+          });
+        });
+        
+        const actualPlacements = calculateActualPlacement(teamScores);
+        duoMatchPlayers.forEach((p) => {
+          const actualPlacement = actualPlacements.get(p.placement);
+          if (actualPlacement !== undefined) {
+            p.placement = actualPlacement;
+          }
         });
 
         setPlayersByMatch((prev) => ({ ...prev, [matchId]: duoMatchPlayers }));
@@ -1173,9 +1563,32 @@ export default function PlayerClient({ discordId }: { discordId: string }) {
                         }>
                           {meta?.mode ?? "—"}
                         </span>
+                        {meta?.aborted_reason && (() => {
+                          const violation = violationsByMatch[row.match_id];
+                          const tooltipText = violation 
+                            ? `Abgebrochen wegen: ${formatAbortReason(meta.aborted_reason)} (${violation.player_name})`
+                            : `Abgebrochen wegen: ${formatAbortReason(meta.aborted_reason)}`;
+                          
+                          return (
+                            <span 
+                              className="ml-2 inline-block text-orange-400 cursor-help"
+                              title={tooltipText}
+                            >
+                              ⚠️
+                            </span>
+                          );
+                        })()}
                       </td>
                       <td className="py-2">
-                        {row.placement ? <PlacementPill p={row.placement} /> : "—"}
+                        {meta?.aborted_reason ? (
+                          <span className="inline-flex items-center justify-center rounded-md border border-zinc-700 bg-black font-semibold h-8 w-8 text-xs text-zinc-400">
+                            X
+                          </span>
+                        ) : row.placement ? (
+                          <PlacementPill p={row.placement} />
+                        ) : (
+                          "—"
+                        )}
                       </td>
                       <td className="py-2">
                         <span className="inline-block px-2 py-1 rounded text-xs font-semibold bg-gradient-to-r from-zinc-700/80 to-zinc-600/80 border border-zinc-400/40 text-zinc-100">
@@ -1186,17 +1599,48 @@ export default function PlayerClient({ discordId }: { discordId: string }) {
                         {meta?.mode === "zwanglos" ? (
                           <span className="text-zinc-400">—</span>
                         ) : meta?.mode === "duo" ? (
-                          <span className="inline-block px-2 py-1 rounded text-xs font-semibold bg-gradient-to-r from-orange-900/60 to-orange-800/60 border border-orange-500/30 text-orange-100">
-                            {row.coins_earned ? `${row.coins_earned >= 0 ? "+" : ""}${row.coins_earned}` : "—"}
+                          (() => {
+                            const coins = row.duo_coins_delta ?? 0;
+                            if (coins === 0) {
+                              return (
+                                <span className="inline-block px-2 py-1 rounded text-xs font-semibold bg-gradient-to-r from-zinc-700/80 to-zinc-600/80 border border-zinc-400/40 text-zinc-400">
+                                  0
+                                </span>
+                              );
+                            }
+                            return (
+                              <span className="inline-block px-2 py-1 rounded text-xs font-semibold bg-gradient-to-r from-orange-900/60 to-orange-800/60 border border-orange-500/30 text-orange-100">
+                                {coins >= 0 ? "+" : ""}{coins}
+                              </span>
+                            );
+                          })()
+                        ) : (typeof row.ranked_games_played === 'number' && row.ranked_games_played < 6) ? (
+                          <span 
+                            className="inline-block px-2 py-1 rounded text-xs font-semibold bg-gradient-to-r from-zinc-700/80 to-zinc-600/80 border border-zinc-400/40 text-zinc-100 cursor-help"
+                            title="Elo nicht einsehbar weil der Spieler noch unranked ist"
+                          >
+                            ?
                           </span>
                         ) : (
-                          <span className={
-                            row.elo_delta && row.elo_delta >= 0
-                              ? "inline-block px-2 py-1 rounded text-xs font-semibold bg-gradient-to-r from-green-900/60 to-green-800/60 border border-green-500/30 text-green-100"
-                              : "inline-block px-2 py-1 rounded text-xs font-semibold bg-gradient-to-r from-red-900/60 to-red-800/60 border border-red-500/30 text-red-100"
-                          }>
-                            {row.elo_delta ? `${row.elo_delta >= 0 ? "+" : ""}${row.elo_delta}` : "—"}
-                          </span>
+                          (() => {
+                            const elo = row.elo_delta ?? 0;
+                            if (elo === 0) {
+                              return (
+                                <span className="inline-block px-2 py-1 rounded text-xs font-semibold bg-gradient-to-r from-zinc-700/80 to-zinc-600/80 border border-zinc-400/40 text-zinc-400">
+                                  0
+                                </span>
+                              );
+                            }
+                            return (
+                              <span className={
+                                elo >= 0
+                                  ? "inline-block px-2 py-1 rounded text-xs font-semibold bg-gradient-to-r from-green-900/60 to-green-800/60 border border-green-500/30 text-green-100"
+                                  : "inline-block px-2 py-1 rounded text-xs font-semibold bg-gradient-to-r from-red-900/60 to-red-800/60 border border-red-500/30 text-red-100"
+                              }>
+                                {elo >= 0 ? "+" : ""}{elo}
+                              </span>
+                            );
+                          })()
                         )}
                       </td>
                       <td className="py-2">
@@ -1225,6 +1669,19 @@ export default function PlayerClient({ discordId }: { discordId: string }) {
                               }>
                                 {meta?.mode ?? "—"}
                               </span>
+                              {meta?.aborted_reason && (() => {
+                                const violation = violationsByMatch[row.match_id];
+                                const abortText = violation 
+                                  ? `Abgebrochen wegen: ${formatAbortReason(meta.aborted_reason)} (${violation.player_name})`
+                                  : `Abgebrochen wegen: ${formatAbortReason(meta.aborted_reason)}`;
+                                
+                                return (
+                                  <>
+                                    <span className="text-orange-400">⚠️</span>
+                                    <span className="text-sm text-orange-300">{abortText}</span>
+                                  </>
+                                );
+                              })()}
                             </div>
 
                             {/* Runden-Tabelle */}
@@ -1232,115 +1689,160 @@ export default function PlayerClient({ discordId }: { discordId: string }) {
                               <div className="mb-2 text-sm font-semibold text-zinc-100">Runden</div>
                               {roundsLoading[row.match_id] ? (
                                 <div className="text-sm text-zinc-300">Lade Runden…</div>
-                              ) : (roundsByMatch[row.match_id] ?? []).length === 0 ? (
-                                <div className="text-sm text-zinc-400">Keine Rundendaten gefunden.</div>
-                              ) : (
-                                <div className="overflow-x-auto">
-                                  <table className="w-full text-sm">
-                                    <thead className="text-xs text-zinc-400">
-                                      <tr>
-                                        <th className="text-left py-2 px-2">
-                                          <span className="inline-block px-2 py-1 rounded text-xs font-semibold bg-gradient-to-r from-zinc-700/80 to-zinc-600/80 border border-zinc-400/40 text-zinc-100">
-                                            Runde
-                                          </span>
-                                        </th>
-                                        <th className="py-2 px-2">
-                                          <span className="inline-block px-2 py-1 rounded text-xs font-semibold bg-gradient-to-r from-zinc-700/80 to-zinc-600/80 border border-zinc-400/40 text-zinc-100">
-                                            Imposter
-                                          </span>
-                                        </th>
-                                        <th className="py-2 px-2">
-                                          <span className="inline-block px-2 py-1 rounded text-xs font-semibold bg-gradient-to-r from-zinc-700/80 to-zinc-600/80 border border-zinc-400/40 text-zinc-100">
-                                            Gewinner
-                                          </span>
-                                        </th>
-                                        <th className="py-2 px-2">
-                                          <span className="inline-block px-2 py-1 rounded text-xs font-semibold bg-gradient-to-r from-zinc-700/80 to-zinc-600/80 border border-zinc-400/40 text-zinc-100">
-                                            Methode
-                                          </span>
-                                        </th>
-                                        <th className="py-2 px-2">
-                                          <span className="inline-block px-2 py-1 rounded text-xs font-semibold bg-gradient-to-r from-zinc-700/80 to-zinc-600/80 border border-zinc-400/40 text-zinc-100">
-                                            Kategorie
-                                          </span>
-                                        </th>
-                                        <th className="py-2 px-2">
-                                          <span className="inline-block px-2 py-1 rounded text-xs font-semibold bg-gradient-to-r from-zinc-700/80 to-zinc-600/80 border border-zinc-400/40 text-zinc-100">
-                                            Wort
-                                          </span>
-                                        </th>
-                                        <th className="py-2 px-2">
-                                          <span className="inline-block px-2 py-1 rounded text-xs font-semibold bg-gradient-to-r from-zinc-700/80 to-zinc-600/80 border border-zinc-400/40 text-zinc-100">
-                                            Punkte I
-                                          </span>
-                                        </th>
-                                        <th className="py-2 px-2">
-                                          <span className="inline-block px-2 py-1 rounded text-xs font-semibold bg-gradient-to-r from-zinc-700/80 to-zinc-600/80 border border-zinc-400/40 text-zinc-100">
-                                            Punkte U
-                                          </span>
-                                        </th>
-                                      </tr>
-                                    </thead>
-                                    <tbody>
-                                      {(roundsByMatch[row.match_id] ?? []).map((rr) => {
-                                        // Punkte basierend auf Gewinner berechnen
-                                        const pointsImposter = rr.aborted ? 0 : (rr.winner === "imposter" ? 2 : 0);
-                                        const pointsUnschuldig = rr.aborted ? 0 : (rr.winner === "imposter" ? 0 : 1);
-                                        
-                                        // Für Duo: zeige Team statt Spielername (Team-Index + 1)
-                                        const imposterDisplay = meta?.mode === "duo" && rr.imposter_team_index != null
-                                          ? `Team ${rr.imposter_team_index + 1}`
-                                          : (rr.imposter_name ?? "—");
-                                        
-                                        return (
-                                        <tr key={rr.id} className={`border-t border-zinc-800 ${rr.aborted ? 'opacity-50' : ''}`}>
-                                          <td className="py-2 px-2">
+                              ) : (() => {
+                                const rounds = roundsByMatch[row.match_id] ?? [];
+                                const matchMeta = Array.isArray((row as any).matches) ? (row as any).matches[0] : (row as any).matches;
+                                const abortedReason = matchMeta?.aborted_reason;
+                                const isAborted = Boolean(abortedReason);
+                                
+                                console.log('[DEBUG] Match ID:', row.match_id);
+                                console.log('[DEBUG] Aborted Reason:', abortedReason);
+                                console.log('[DEBUG] Is Aborted:', isAborted);
+                                console.log('[DEBUG] Played Rounds:', rounds.length);
+                                
+                                // Bestimme maximale Rundenanzahl (5 für alle Modi)
+                                const maxRounds = 5;
+                                const playedRounds = rounds.length;
+                                
+                                // Erstelle Array mit allen Runden (gespielte + abgebrochene)
+                                const allRounds: (RoundRow | { isAborted: true; round_no: number })[] = [...rounds];
+                                
+                                // Füge abgebrochene Runden hinzu wenn Spiel abgebrochen wurde
+                                if (isAborted && playedRounds < maxRounds) {
+                                  for (let i = playedRounds + 1; i <= maxRounds; i++) {
+                                    allRounds.push({ isAborted: true, round_no: i });
+                                  }
+                                }
+                                
+                                if (allRounds.length === 0) {
+                                  return <div className="text-sm text-zinc-400">Keine Rundendaten gefunden.</div>;
+                                }
+                                
+                                return (
+                                  <div className="overflow-x-auto">
+                                    <table className="w-full text-sm">
+                                      <thead className="text-xs text-zinc-400">
+                                        <tr>
+                                          <th className="text-left py-2 px-2">
                                             <span className="inline-block px-2 py-1 rounded text-xs font-semibold bg-gradient-to-r from-zinc-700/80 to-zinc-600/80 border border-zinc-400/40 text-zinc-100">
-                                              {rr.round_no}{rr.aborted ? ' ⚠️' : ''}
+                                              Runde
                                             </span>
-                                          </td>
-                                          <td className="py-2 px-2">
-                                            <span className="inline-block px-2 py-1 rounded text-xs font-semibold bg-gradient-to-r from-red-900/60 to-red-800/60 border border-red-500/30 text-red-100">
-                                              {imposterDisplay}
-                                            </span>
-                                          </td>
-                                          <td className="py-2 px-2">
+                                          </th>
+                                          <th className="py-2 px-2">
                                             <span className="inline-block px-2 py-1 rounded text-xs font-semibold bg-gradient-to-r from-zinc-700/80 to-zinc-600/80 border border-zinc-400/40 text-zinc-100">
-                                              {rr.aborted ? 'Abgebrochen' : winnerLabel(rr.winner)}
+                                              Imposter
                                             </span>
-                                          </td>
-                                          <td className="py-2 px-2">
+                                          </th>
+                                          <th className="py-2 px-2">
                                             <span className="inline-block px-2 py-1 rounded text-xs font-semibold bg-gradient-to-r from-zinc-700/80 to-zinc-600/80 border border-zinc-400/40 text-zinc-100">
-                                              {rr.aborted ? (rr.aborted_reason ?? '—') : winMethodLabel(rr.win_method)}
+                                              Gewinner
                                             </span>
-                                          </td>
-                                          <td className="py-2 px-2">
+                                          </th>
+                                          <th className="py-2 px-2">
                                             <span className="inline-block px-2 py-1 rounded text-xs font-semibold bg-gradient-to-r from-zinc-700/80 to-zinc-600/80 border border-zinc-400/40 text-zinc-100">
-                                              {formatCategoryName(rr.categoryName)}
+                                              Methode
                                             </span>
-                                          </td>
-                                          <td className="py-2 px-2">
+                                          </th>
+                                          <th className="py-2 px-2">
                                             <span className="inline-block px-2 py-1 rounded text-xs font-semibold bg-gradient-to-r from-zinc-700/80 to-zinc-600/80 border border-zinc-400/40 text-zinc-100">
-                                              {rr.word ?? "—"}
+                                              Kategorie
                                             </span>
-                                          </td>
-                                          <td className="py-2 px-2">
+                                          </th>
+                                          <th className="py-2 px-2">
                                             <span className="inline-block px-2 py-1 rounded text-xs font-semibold bg-gradient-to-r from-zinc-700/80 to-zinc-600/80 border border-zinc-400/40 text-zinc-100">
-                                              {rr.aborted ? '—' : pointsImposter}
+                                              Wort
                                             </span>
-                                          </td>
-                                          <td className="py-2 px-2">
+                                          </th>
+                                          <th className="py-2 px-2">
                                             <span className="inline-block px-2 py-1 rounded text-xs font-semibold bg-gradient-to-r from-zinc-700/80 to-zinc-600/80 border border-zinc-400/40 text-zinc-100">
-                                              {rr.aborted ? '—' : pointsUnschuldig}
+                                              Punkte I
                                             </span>
-                                          </td>
+                                          </th>
+                                          <th className="py-2 px-2">
+                                            <span className="inline-block px-2 py-1 rounded text-xs font-semibold bg-gradient-to-r from-zinc-700/80 to-zinc-600/80 border border-zinc-400/40 text-zinc-100">
+                                              Punkte U
+                                            </span>
+                                          </th>
                                         </tr>
-                                        );
-                                      })}
-                                    </tbody>
-                                  </table>
-                                </div>
-                              )}
+                                      </thead>
+                                      <tbody>
+                                        {allRounds.map((rr) => {
+                                          // Prüfe ob es eine abgebrochene Runde ist
+                                          if ('isAborted' in rr && rr.isAborted) {
+                                            return (
+                                              <tr key={`aborted-${rr.round_no}`} className="border-t border-zinc-800 opacity-60">
+                                                <td className="py-2 px-2">
+                                                  <span className="inline-block px-2 py-1 rounded text-xs font-semibold bg-gradient-to-r from-zinc-700/80 to-zinc-600/80 border border-zinc-400/40 text-zinc-100">
+                                                    {rr.round_no}
+                                                  </span>
+                                                </td>
+                                                <td className="py-2 px-2" colSpan={7}>
+                                                  <span className="inline-block px-2 py-1 rounded text-xs font-semibold bg-gradient-to-r from-orange-900/60 to-orange-800/60 border border-orange-500/30 text-orange-100">
+                                                    Abgebrochen wegen: {formatAbortReason(abortedReason)}
+                                                  </span>
+                                                </td>
+                                              </tr>
+                                            );
+                                          }
+                                          
+                                          // Normale gespielte Runde
+                                          const pointsImposter = rr.aborted ? 0 : (rr.winner === "imposter" ? 2 : 0);
+                                          const pointsUnschuldig = rr.aborted ? 0 : (rr.winner === "imposter" ? 0 : 1);
+                                          
+                                          const imposterDisplay = meta?.mode === "duo" && rr.imposter_team_index != null
+                                            ? `Team ${rr.imposter_team_index + 1}`
+                                            : (rr.imposter_name ?? "—");
+                                          
+                                          return (
+                                            <tr key={rr.id} className={`border-t border-zinc-800 ${rr.aborted ? 'opacity-50' : ''}`}>
+                                              <td className="py-2 px-2">
+                                                <span className="inline-block px-2 py-1 rounded text-xs font-semibold bg-gradient-to-r from-zinc-700/80 to-zinc-600/80 border border-zinc-400/40 text-zinc-100">
+                                                  {rr.round_no}{rr.aborted ? ' ⚠️' : ''}
+                                                </span>
+                                              </td>
+                                              <td className="py-2 px-2">
+                                                <span className="inline-block px-2 py-1 rounded text-xs font-semibold bg-gradient-to-r from-red-900/60 to-red-800/60 border border-red-500/30 text-red-100">
+                                                  {imposterDisplay}
+                                                </span>
+                                              </td>
+                                              <td className="py-2 px-2">
+                                                <span className="inline-block px-2 py-1 rounded text-xs font-semibold bg-gradient-to-r from-zinc-700/80 to-zinc-600/80 border border-zinc-400/40 text-zinc-100">
+                                                  {rr.aborted ? 'Abgebrochen' : winnerLabel(rr.winner)}
+                                                </span>
+                                              </td>
+                                              <td className="py-2 px-2">
+                                                <span className="inline-block px-2 py-1 rounded text-xs font-semibold bg-gradient-to-r from-zinc-700/80 to-zinc-600/80 border border-zinc-400/40 text-zinc-100">
+                                                  {rr.aborted ? (rr.aborted_reason ?? '—') : winMethodLabel(rr.win_method)}
+                                                </span>
+                                              </td>
+                                              <td className="py-2 px-2">
+                                                <span className="inline-block px-2 py-1 rounded text-xs font-semibold bg-gradient-to-r from-zinc-700/80 to-zinc-600/80 border border-zinc-400/40 text-zinc-100">
+                                                  {formatCategoryName(rr.categoryName)}
+                                                </span>
+                                              </td>
+                                              <td className="py-2 px-2">
+                                                <span className="inline-block px-2 py-1 rounded text-xs font-semibold bg-gradient-to-r from-zinc-700/80 to-zinc-600/80 border border-zinc-400/40 text-zinc-100">
+                                                  {rr.word ?? "—"}
+                                                </span>
+                                              </td>
+                                              <td className="py-2 px-2">
+                                                <span className="inline-block px-2 py-1 rounded text-xs font-semibold bg-gradient-to-r from-zinc-700/80 to-zinc-600/80 border border-zinc-400/40 text-zinc-100">
+                                                  {rr.aborted ? '—' : pointsImposter}
+                                                </span>
+                                              </td>
+                                              <td className="py-2 px-2">
+                                                <span className="inline-block px-2 py-1 rounded text-xs font-semibold bg-gradient-to-r from-zinc-700/80 to-zinc-600/80 border border-zinc-400/40 text-zinc-100">
+                                                  {rr.aborted ? '—' : pointsUnschuldig}
+                                                </span>
+                                              </td>
+                                            </tr>
+                                          );
+                                        })}
+                                      </tbody>
+                                    </table>
+                                  </div>
+                                );
+                              })()}
                             </div>
 
                             {/* Spieler-Rangliste */}
@@ -1364,25 +1866,40 @@ export default function PlayerClient({ discordId }: { discordId: string }) {
                                     </thead>
                                     <tbody>
                                       {(() => {
-                                        // Gruppiere Spieler nach Platzierung
-                                        const byPlacement: Record<number, MatchPlayerRow[]> = {};
+                                        // Gruppiere Spieler nach team_index (nicht nach Platzierung!)
+                                        const byTeam: Record<number, MatchPlayerRow[]> = {};
                                         (playersByMatch[row.match_id] ?? []).forEach((mp) => {
-                                          if (!byPlacement[mp.placement]) byPlacement[mp.placement] = [];
-                                          byPlacement[mp.placement].push(mp);
+                                          const teamIdx = mp.team_index ?? 0;
+                                          if (!byTeam[teamIdx]) byTeam[teamIdx] = [];
+                                          byTeam[teamIdx].push(mp);
                                         });
                                         
-                                        // Sortiere nach Platzierung
-                                        const sortedPlacements = Object.keys(byPlacement).map(Number).sort((a, b) => a - b);
+                                        // Sortiere Teams nach Platzierung (niedrigste Platzierung zuerst)
+                                        const sortedTeams = Object.entries(byTeam)
+                                          .map(([teamIdx, players]) => ({
+                                            teamIdx: Number(teamIdx),
+                                            players,
+                                            placement: players[0].placement, // Alle Spieler im Team haben gleiche Platzierung
+                                          }))
+                                          .sort((a, b) => a.placement - b.placement);
                                         
-                                        return sortedPlacements.map((placement) => {
-                                          const teamPlayers = byPlacement[placement];
-                                          return teamPlayers.map((mp, idx) => (
+                                        return sortedTeams.map((team, displayIndex) => {
+                                          const teamNumber = displayIndex + 1; // Team 1, 2, 3, 4 basierend auf Anzeigereihenfolge
+                                          console.log(`[DUO TEAM] Placement: ${team.placement}, TeamIndex: ${team.teamIdx}, DisplayNumber: ${teamNumber}`);
+                                          
+                                          return team.players.map((mp, idx) => (
                                             <tr key={mp.discord_id} className="border-t border-zinc-800">
                                               {idx === 0 && (
-                                                <td className="py-2" rowSpan={teamPlayers.length}>
+                                                <td className="py-2" rowSpan={team.players.length}>
                                                   <div className="flex items-center gap-2">
-                                                    <PlacementPill p={placement} />
-                                                    <span className="text-zinc-300">Team {placement}</span>
+                                                    {meta?.aborted_reason ? (
+                                                      <span className="inline-flex items-center justify-center rounded-md border border-zinc-700 bg-black font-semibold h-8 w-8 text-xs text-zinc-400">
+                                                        X
+                                                      </span>
+                                                    ) : (
+                                                      <PlacementPill p={team.placement} />
+                                                    )}
+                                                    <span className="text-zinc-300">Team {teamNumber}</span>
                                                   </div>
                                                 </td>
                                               )}
@@ -1398,15 +1915,27 @@ export default function PlayerClient({ discordId }: { discordId: string }) {
                                               </td>
                                               {idx === 0 && (
                                                 <>
-                                                  <td className="py-2 text-center" rowSpan={teamPlayers.length}>
+                                                  <td className="py-2 text-center" rowSpan={team.players.length}>
                                                     <span className="inline-block px-2 py-1 rounded text-xs font-semibold bg-gradient-to-r from-zinc-700/80 to-zinc-600/80 border border-zinc-400/40 text-zinc-100">
                                                       {mp.total_points}
                                                     </span>
                                                   </td>
-                                                  <td className="py-2 text-center" rowSpan={teamPlayers.length}>
-                                                    <span className="inline-block px-2 py-1 rounded text-xs font-semibold bg-gradient-to-r from-orange-900/60 to-orange-800/60 border border-orange-500/30 text-orange-100">
-                                                      {mp.duo_coins_delta ? `${mp.duo_coins_delta >= 0 ? "+" : ""}${mp.duo_coins_delta}` : "—"}
-                                                    </span>
+                                                  <td className="py-2 text-center" rowSpan={team.players.length}>
+                                                    {(() => {
+                                                      const coins = mp.duo_coins_delta ?? 0;
+                                                      if (coins === 0) {
+                                                        return (
+                                                          <span className="inline-block px-2 py-1 rounded text-xs font-semibold bg-gradient-to-r from-zinc-700/80 to-zinc-600/80 border border-zinc-400/40 text-zinc-400">
+                                                            0
+                                                          </span>
+                                                        );
+                                                      }
+                                                      return (
+                                                        <span className="inline-block px-2 py-1 rounded text-xs font-semibold bg-gradient-to-r from-orange-900/60 to-orange-800/60 border border-orange-500/30 text-orange-100">
+                                                          {coins >= 0 ? "+" : ""}{coins}
+                                                        </span>
+                                                      );
+                                                    })()}
                                                   </td>
                                                 </>
                                               )}
@@ -1433,7 +1962,15 @@ export default function PlayerClient({ discordId }: { discordId: string }) {
                                       {(playersByMatch[row.match_id] ?? []).map((mp) => (
                                         <tr key={mp.discord_id} className="border-t border-zinc-800">
                                           <td className="py-2">
-                                            {mp.placement ? <PlacementPill p={mp.placement} /> : "—"}
+                                            {meta?.aborted_reason ? (
+                                              <span className="inline-flex items-center justify-center rounded-md border border-zinc-700 bg-black font-semibold h-8 w-8 text-xs text-zinc-400">
+                                                X
+                                              </span>
+                                            ) : mp.placement ? (
+                                              <PlacementPill p={mp.placement} />
+                                            ) : (
+                                              "—"
+                                            )}
                                           </td>
                                           <td className="py-2">
                                             <span className="inline-block px-2 py-1 rounded text-xs font-semibold bg-gradient-to-r from-zinc-700/80 to-zinc-600/80 border border-zinc-400/40">
@@ -1453,14 +1990,33 @@ export default function PlayerClient({ discordId }: { discordId: string }) {
                                           <td className="py-2 text-center">
                                             {(meta?.mode === "zwanglos") ? (
                                               <span className="text-zinc-400">—</span>
-                                            ) : (
-                                              <span className={
-                                                mp.elo_delta >= 0
-                                                  ? "inline-block px-2 py-1 rounded text-xs font-semibold bg-gradient-to-r from-green-900/60 to-green-800/60 border border-green-500/30 text-green-100"
-                                                  : "inline-block px-2 py-1 rounded text-xs font-semibold bg-gradient-to-r from-red-900/60 to-red-800/60 border border-red-500/30 text-red-100"
-                                              }>
-                                                {mp.elo_delta >= 0 ? "+" : ""}{mp.elo_delta}
+                                            ) : (mp.ranked_games_played !== undefined && mp.ranked_games_played < 6) ? (
+                                              <span 
+                                                className="inline-block px-2 py-1 rounded text-xs font-semibold bg-gradient-to-r from-zinc-700/80 to-zinc-600/80 border border-zinc-400/40 text-zinc-100 cursor-help"
+                                                title="Elo nicht einsehbar weil der Spieler noch unranked ist"
+                                              >
+                                                ?
                                               </span>
+                                            ) : (
+                                              (() => {
+                                                const elo = mp.elo_delta ?? 0;
+                                                if (elo === 0) {
+                                                  return (
+                                                    <span className="inline-block px-2 py-1 rounded text-xs font-semibold bg-gradient-to-r from-zinc-700/80 to-zinc-600/80 border border-zinc-400/40 text-zinc-400">
+                                                      0
+                                                    </span>
+                                                  );
+                                                }
+                                                return (
+                                                  <span className={
+                                                    elo >= 0
+                                                      ? "inline-block px-2 py-1 rounded text-xs font-semibold bg-gradient-to-r from-green-900/60 to-green-800/60 border border-green-500/30 text-green-100"
+                                                      : "inline-block px-2 py-1 rounded text-xs font-semibold bg-gradient-to-r from-red-900/60 to-red-800/60 border border-red-500/30 text-red-100"
+                                                  }>
+                                                    {elo >= 0 ? "+" : ""}{elo}
+                                                  </span>
+                                                );
+                                              })()
                                             )}
                                           </td>
                                         </tr>

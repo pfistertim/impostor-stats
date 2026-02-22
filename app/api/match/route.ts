@@ -340,60 +340,96 @@ async function handleDuoMatch(body: any) {
   // ✅ Coins berechnen - bei Violation vom Bot übernehmen, sonst selbst berechnen
   let coinDistribution: Record<number, number> = {};
   
-  // Prüfe ob es eine Violation gibt
-  const hasViolation = body.violation?.type && body.violation?.team !== undefined;
+  // Prüfe ob es eine Violation gibt UND der Bot bereits Coins berechnet hat
+  const hasViolation = body.violation?.type && body.violation?.discord_ids;
+  const botProvidedCoins = hasViolation && players.some((p: any) => p.coins_earned !== undefined);
   
-  if (hasViolation) {
+  if (botProvidedCoins) {
     // ✅ Bei Violation: Coins vom Bot übernehmen (bereits korrekt berechnet)
+    console.log("[handleDuoMatch] Using coins from bot (violation case)");
     for (const player of players) {
       const teamIdx = Number(player.team_index ?? 0);
       const coinsEarned = Number(player.coins_earned ?? 0);
       coinDistribution[teamIdx] = coinsEarned;
     }
   } else {
-    // ✅ Normales Spiel: Coins mit Gleichstands-Logik berechnen
+    // ✅ Normales Spiel ODER Violation ohne Bot-Coins: Coins selbst berechnen
+    console.log("[handleDuoMatch] Calculating coins (normal game or violation without bot coins)");
     const rankings = Array.from(teamsByIndex.entries())
       .map(([teamIdx, team]) => ({ teamIdx, score: team.score }))
       .sort((a, b) => b.score - a.score);
     
     const placementCoins = [20, 10, 0, -10];
     
-    let currentRank = 0;
-    let i = 0;
-    
-    while (i < rankings.length) {
-      const currentScore = rankings[i].score;
-      const tiedTeams = rankings.filter(r => r.score === currentScore);
+    // ✅ Bei Violation: Violation-Team auf Platz 4 setzen
+    let violationTeamIdx: number | undefined = undefined;
+    if (hasViolation && body.violation?.discord_ids && body.violation.discord_ids.length > 0) {
+      // Finde Team-Index des ersten Violation-Spielers
+      const violationPlayerId = String(body.violation.discord_ids[0]);
+      for (const player of players) {
+        if (String(player.discord_id) === violationPlayerId) {
+          violationTeamIdx = Number(player.team_index ?? 0);
+          break;
+        }
+      }
       
-      if (tiedTeams.length === 4) {
-        // Alle gleich: Durchschnitt der Coins
-        const totalCoins = tiedTeams.reduce((sum, t, idx) => sum + placementCoins[idx], 0);
-        const coinsPerTeam = Math.round(totalCoins / tiedTeams.length);
-        for (const team of tiedTeams) {
-          coinDistribution[team.teamIdx] = coinsPerTeam;
-        }
-        break;
-      } else if (tiedTeams.length > 1) {
-        // Mehrere Teams gleich: Coins addieren und teilen
-        let totalCoins = 0;
-        for (let j = 0; j < tiedTeams.length; j++) {
-          totalCoins += placementCoins[currentRank + j] || 0;
-        }
-        const coinsPerTeam = Math.floor(totalCoins / tiedTeams.length);
+      if (violationTeamIdx !== undefined) {
+        console.log("[handleDuoMatch] Violation team:", violationTeamIdx);
         
-        for (const team of tiedTeams) {
-          coinDistribution[team.teamIdx] = coinsPerTeam;
-        }
+        // Entferne Violation-Team aus Rankings
+        const nonViolationTeams = rankings.filter(r => r.teamIdx !== violationTeamIdx);
+        const violationTeam = rankings.find(r => r.teamIdx === violationTeamIdx);
         
-        currentRank += tiedTeams.length;
-        i += tiedTeams.length;
-      } else {
-        // Kein Gleichstand
-        coinDistribution[rankings[i].teamIdx] = placementCoins[currentRank] || 0;
-        currentRank++;
-        i++;
+        // Setze Violation-Team auf Platz 4
+        const artificialRankings = [
+          ...nonViolationTeams.slice(0, 3), // Top 3 Teams
+          ...(violationTeam ? [violationTeam] : []), // Violation-Team als 4.
+        ];
+        
+        // Berechne Coins für alle Teams
+        for (let idx = 0; idx < artificialRankings.length; idx++) {
+          const teamIdx = artificialRankings[idx].teamIdx;
+          let coins = placementCoins[idx] ?? 0;
+          
+          // ✅ Violation-Team bekommt doppelten Minus
+          if (teamIdx === violationTeamIdx && coins < 0) {
+            console.log(`[handleDuoMatch] Team ${teamIdx} gets double penalty: ${coins} -> ${coins * 2}`);
+            coins = coins * 2;
+          }
+          
+          coinDistribution[teamIdx] = coins;
+        }
       }
     }
+    
+    // Normale Berechnung (wenn keine Violation oder Violation-Team nicht gefunden)
+    if (violationTeamIdx === undefined) {
+      // Berechne Coins mit Gleichstands-Logik (wie bei Elo)
+      let i = 0;
+      while (i < rankings.length) {
+        const currentScore = rankings[i].score;
+        
+        // Finde alle Teams mit gleicher Punktzahl
+        let j = i;
+        while (j + 1 < rankings.length && rankings[j + 1].score === currentScore) j++;
+        
+        // Berechne Durchschnitt der Coins für diese Plätze
+        let sum = 0;
+        for (let k = i; k <= j; k++) {
+          sum += placementCoins[k] ?? 0;
+        }
+        const avgCoins = sum / (j - i + 1);
+        
+        // Weise allen gebundenen Teams die durchschnittlichen Coins zu
+        for (let k = i; k <= j; k++) {
+          coinDistribution[rankings[k].teamIdx] = Math.round(avgCoins);
+        }
+        
+        i = j + 1;
+      }
+    }
+    
+    console.log("[handleDuoMatch] Calculated coin distribution:", coinDistribution);
   }
 
   // Teams in DB speichern
@@ -797,28 +833,33 @@ export async function POST(req: Request) {
       const placement = played < PLACEMENT_GAMES;
       isPlacement[id] = placement;
       if (placement) anyPlacement = true;
+      console.log(`[ELO] Player ${id}: ranked_games_played=${played}, isPlacement=${placement}`);
     }
 
-    // ✅ Bei Abbruch wegen Violation: Violation-Spieler bekommt -30 Elo, andere 0
+    // ✅ Bei Abbruch wegen Violation: Violation-Spieler wird als 4. Platz behandelt
     let finalDeltas: Record<string, number>;
+    let finalSorted = sorted; // ✅ Standardmäßig die normale Sortierung
     
     if (aborted_reason && body.violation?.discord_id) {
       const violationId = String(body.violation.discord_id);
-      finalDeltas = {};
       
-      for (const id of ids) {
-        if (id === violationId) {
-          // Violation-Spieler: -30 Elo (4. Platz Strafe)
-          finalDeltas[id] = -30;
-        } else {
-          // Andere Spieler: 0 Elo
-          finalDeltas[id] = 0;
-        }
-      }
-    } else {
-      // Normales Spiel: Elo-Berechnung wie gewohnt
+      // Erstelle künstliche Platzierung: Violation-Spieler = 4. Platz, andere = 1-3 nach Punkten
+      const nonViolationPlayers = sorted.filter(s => s.discord_id !== violationId);
+      const violationPlayer = sorted.find(s => s.discord_id === violationId);
+      
+      // Sortiere Nicht-Violation-Spieler nach Punkten und weise Plätze 1-3 zu
+      const artificialSorted = [
+        ...nonViolationPlayers.slice(0, 3), // Top 3 Spieler
+        ...(violationPlayer ? [violationPlayer] : []), // Violation-Spieler als 4.
+      ];
+      
+      finalSorted = artificialSorted; // ✅ Verwende künstliche Sortierung für match_results
+      
+      // Berechne Elo-Deltas basierend auf dieser künstlichen Platzierung
+      const baseDeltaMap = computeBaseDeltasByTiesFloat(artificialSorted);
+      
       const scaled: Record<string, number> = {};
-      for (const s of sorted) {
+      for (const s of artificialSorted) {
         const id = s.discord_id;
         let d = baseDeltaMap.get(id) ?? 0;
 
@@ -826,7 +867,39 @@ export async function POST(req: Request) {
         const avgOthers = (eloBefore[others[0]] + eloBefore[others[1]] + eloBefore[others[2]]) / 3;
 
         d = applyLobbyMultiplierFloat(d, eloBefore[id], avgOthers);
-        if (isPlacement[id]) d = d * PLACEMENT_MULT;
+        if (isPlacement[id]) {
+          console.log(`[ELO VIOLATION] Player ${id} is in placement, applying x${PLACEMENT_MULT} multiplier: ${d} -> ${d * PLACEMENT_MULT}`);
+          d = d * PLACEMENT_MULT;
+        }
+
+        // ✅ Violation-Spieler bekommt doppelten Minus
+        if (id === violationId && d < 0) {
+          console.log(`[ELO VIOLATION] Player ${id} gets double penalty: ${d} -> ${d * 2}`);
+          d = d * 2;
+        }
+
+        scaled[id] = d;
+      }
+
+      finalDeltas = anyPlacement
+        ? Object.fromEntries(ids.map((id: string) => [id, Math.round(scaled[id] ?? 0)]))
+        : normalizeZeroSumAndRound(scaled);
+    } else {
+      // Normales Spiel: Elo-Berechnung wie gewohnt
+      const baseDeltaMapNormal = computeBaseDeltasByTiesFloat(sorted); // ✅ FIX: baseDeltaMap hier definieren
+      const scaled: Record<string, number> = {};
+      for (const s of sorted) {
+        const id = s.discord_id;
+        let d = baseDeltaMapNormal.get(id) ?? 0;
+
+        const others = ids.filter((x: string) => x !== id);
+        const avgOthers = (eloBefore[others[0]] + eloBefore[others[1]] + eloBefore[others[2]]) / 3;
+
+        d = applyLobbyMultiplierFloat(d, eloBefore[id], avgOthers);
+        if (isPlacement[id]) {
+          console.log(`[ELO NORMAL] Player ${id} is in placement, applying x${PLACEMENT_MULT} multiplier: ${d} -> ${d * PLACEMENT_MULT}`);
+          d = d * PLACEMENT_MULT;
+        }
 
         scaled[id] = d;
       }
@@ -836,16 +909,28 @@ export async function POST(req: Request) {
         : normalizeZeroSumAndRound(scaled);
     }
 
-    const resultsRows = sorted.map((s, idx) => ({
+    console.log(`[ELO] Final deltas:`, finalDeltas);
+    console.log(`[ELO] Final sorted:`, finalSorted);
+
+    const resultsRows = finalSorted.map((s, idx) => ({
       match_id,
       discord_id: s.discord_id,
       total_points: s.points,
       placement: idx + 1,
       elo_delta: finalDeltas[s.discord_id] ?? 0,
     }));
+    
+    console.log(`[MATCH_RESULTS] Inserting ${resultsRows.length} rows:`, JSON.stringify(resultsRows, null, 2));
+    
     const { error: mrErr } = await supabaseAdmin.from("match_results").insert(resultsRows);
-    if (mrErr) throw mrErr;
+    if (mrErr) {
+      console.error("[MATCH_RESULTS] Error inserting:", mrErr);
+      throw mrErr;
+    }
+    
+    console.log("[MATCH_RESULTS] Successfully inserted");
 
+    console.log("[PLAYERS] Updating player stats...");
     for (const id of ids) {
       const curElo = Number(byId[id]?.elo_ranked ?? 1000);
       const curGR = Number(byId[id]?.games_ranked ?? 0);
