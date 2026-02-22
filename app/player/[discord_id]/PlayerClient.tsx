@@ -29,6 +29,7 @@ type RecentMatchRow = {
   placement: number | null;
   elo_delta: number | null;
   coins_earned: number | null;
+  duo_coins_delta: number | null;
   ranked_games_played?: number | null; // ✅ Für Unranked-Check in Haupttabelle
 
   // Supabase join -> kann Object oder Array sein
