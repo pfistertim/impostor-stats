@@ -1788,19 +1788,22 @@ export default function PlayerClient({ discordId }: { discordId: string }) {
                                             );
                                           }
                                           
-                                          // Normale gespielte Runde
-                                          const pointsImposter = rr.aborted ? 0 : (rr.winner === "imposter" ? 2 : 0);
-                                          const pointsUnschuldig = rr.aborted ? 0 : (rr.winner === "imposter" ? 0 : 1);
+                                          // TypeScript weiß jetzt, dass rr vom Typ RoundRow ist
+                                          const round = rr as RoundRow;
                                           
-                                          const imposterDisplay = meta?.mode === "duo" && rr.imposter_team_index != null
-                                            ? `Team ${rr.imposter_team_index + 1}`
-                                            : (rr.imposter_name ?? "—");
+                                          // Normale gespielte Runde
+                                          const pointsImposter = round.aborted ? 0 : (round.winner === "imposter" ? 2 : 0);
+                                          const pointsUnschuldig = round.aborted ? 0 : (round.winner === "imposter" ? 0 : 1);
+                                          
+                                          const imposterDisplay = meta?.mode === "duo" && round.imposter_team_index != null
+                                            ? `Team ${round.imposter_team_index + 1}`
+                                            : (round.imposter_name ?? "—");
                                           
                                           return (
-                                            <tr key={rr.id} className={`border-t border-zinc-800 ${rr.aborted ? 'opacity-50' : ''}`}>
+                                            <tr key={round.id} className={`border-t border-zinc-800 ${round.aborted ? 'opacity-50' : ''}`}>
                                               <td className="py-2 px-2">
                                                 <span className="inline-block px-2 py-1 rounded text-xs font-semibold bg-gradient-to-r from-zinc-700/80 to-zinc-600/80 border border-zinc-400/40 text-zinc-100">
-                                                  {rr.round_no}{rr.aborted ? ' ⚠️' : ''}
+                                                  {round.round_no}{round.aborted ? ' ⚠️' : ''}
                                                 </span>
                                               </td>
                                               <td className="py-2 px-2">
@@ -1810,32 +1813,32 @@ export default function PlayerClient({ discordId }: { discordId: string }) {
                                               </td>
                                               <td className="py-2 px-2">
                                                 <span className="inline-block px-2 py-1 rounded text-xs font-semibold bg-gradient-to-r from-zinc-700/80 to-zinc-600/80 border border-zinc-400/40 text-zinc-100">
-                                                  {rr.aborted ? 'Abgebrochen' : winnerLabel(rr.winner)}
+                                                  {round.aborted ? 'Abgebrochen' : winnerLabel(round.winner)}
                                                 </span>
                                               </td>
                                               <td className="py-2 px-2">
                                                 <span className="inline-block px-2 py-1 rounded text-xs font-semibold bg-gradient-to-r from-zinc-700/80 to-zinc-600/80 border border-zinc-400/40 text-zinc-100">
-                                                  {rr.aborted ? (rr.aborted_reason ?? '—') : winMethodLabel(rr.win_method)}
+                                                  {round.aborted ? (round.aborted_reason ?? '—') : winMethodLabel(round.win_method)}
                                                 </span>
                                               </td>
                                               <td className="py-2 px-2">
                                                 <span className="inline-block px-2 py-1 rounded text-xs font-semibold bg-gradient-to-r from-zinc-700/80 to-zinc-600/80 border border-zinc-400/40 text-zinc-100">
-                                                  {formatCategoryName(rr.categoryName)}
+                                                  {formatCategoryName(round.categoryName)}
                                                 </span>
                                               </td>
                                               <td className="py-2 px-2">
                                                 <span className="inline-block px-2 py-1 rounded text-xs font-semibold bg-gradient-to-r from-zinc-700/80 to-zinc-600/80 border border-zinc-400/40 text-zinc-100">
-                                                  {rr.word ?? "—"}
+                                                  {round.word ?? "—"}
                                                 </span>
                                               </td>
                                               <td className="py-2 px-2">
                                                 <span className="inline-block px-2 py-1 rounded text-xs font-semibold bg-gradient-to-r from-zinc-700/80 to-zinc-600/80 border border-zinc-400/40 text-zinc-100">
-                                                  {rr.aborted ? '—' : pointsImposter}
+                                                  {round.aborted ? '—' : pointsImposter}
                                                 </span>
                                               </td>
                                               <td className="py-2 px-2">
                                                 <span className="inline-block px-2 py-1 rounded text-xs font-semibold bg-gradient-to-r from-zinc-700/80 to-zinc-600/80 border border-zinc-400/40 text-zinc-100">
-                                                  {rr.aborted ? '—' : pointsUnschuldig}
+                                                  {round.aborted ? '—' : pointsUnschuldig}
                                                 </span>
                                               </td>
                                             </tr>
