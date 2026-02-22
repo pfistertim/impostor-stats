@@ -37,11 +37,13 @@ type RecentMatchRow = {
     started_at: string | null;
     ended_at: string | null;
     mode: "ranked" | "zwanglos" | string;
+    aborted_reason: string | null;
   } | {
     id: number;
     started_at: string | null;
     ended_at: string | null;
     mode: "ranked" | "zwanglos" | string;
+    aborted_reason: string | null;
   }[];
 };
 
