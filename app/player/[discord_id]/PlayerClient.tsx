@@ -1389,13 +1389,13 @@ export default function PlayerClient({ discordId }: { discordId: string }) {
               <img src="/badges/Duocoin.png" alt="Duo Coin" className="h-12 md:h-16 w-auto object-contain -ml-2 md:ml-0" />
             </div>
 
-            {/* Ranked - Mobile: Badge rechts, Desktop: in Box */}
-            <div className="flex md:hidden flex-col items-center">
+            {/* Ranked - Mobile: Badge rechts mit Text daneben, Desktop: in Box */}
+            <div className="flex md:hidden items-center gap-2">
               <div 
-                className={`relative ${badgeEffects.className}`}
+                className={`relative flex-shrink-0 ${badgeEffects.className}`}
                 style={badgeEffects.style}
               >
-                <img src={rank.badge} alt={rank.label} className="h-32 w-auto object-contain" />
+                <img src={rank.badge} alt={rank.label} className="h-12 w-auto object-contain" />
                 {(rank.tier === "gold" || rank.tier === "platin" || rank.tier === "diamant" || rank.tier === "master") && (
                   <div 
                     className="absolute inset-0 pointer-events-none rounded-full"
@@ -1416,17 +1416,17 @@ export default function PlayerClient({ discordId }: { discordId: string }) {
                   />
                 )}
               </div>
-              <div className="text-center mt-1">
-                <div className="text-sm font-semibold text-zinc-100" style={{ textShadow: '0 0 3px black, 0 0 5px black, 1px 1px 2px black' }}>
+              <div className="flex flex-col justify-center">
+                <div className="text-sm font-semibold text-zinc-100 leading-tight" style={{ textShadow: '0 0 3px black, 0 0 5px black, 1px 1px 2px black' }}>
                   {rank.label}
                 </div>
                 {rank.value !== null && (
-                  <div className="text-xs text-zinc-300 mt-0.5" style={{ textShadow: '0 0 3px black, 0 0 5px black, 1px 1px 2px black' }}>
+                  <div className="text-xs text-zinc-300 mt-0.5 leading-tight" style={{ textShadow: '0 0 3px black, 0 0 5px black, 1px 1px 2px black' }}>
                     {rank.value}
                   </div>
                 )}
                 {!qualified && (
-                  <div className="text-xs text-zinc-500 mt-0.5">
+                  <div className="text-xs text-zinc-500 mt-0.5 leading-tight">
                     {Math.max(0, 6 - clamp(player.games_ranked))} Spiele
                   </div>
                 )}
