@@ -1366,9 +1366,9 @@ export default function PlayerClient({ discordId }: { discordId: string }) {
             <div className="mt-1 font-mono text-xs text-zinc-500">{player.discord_id}</div>
           </div>
 
-          <div className="flex items-start gap-3 md:gap-4 relative">
-            {/* Duo Coins */}
-            <div className="flex items-center gap-2 md:gap-4 rounded-2xl border border-orange-500/30 bg-gradient-to-br from-black via-orange-900/40 to-black shadow-lg shadow-orange-700/30 px-3 py-2 md:px-4 md:py-3 flex-1">
+          <div className="flex items-start gap-3 md:gap-4">
+            {/* Duo Coins - Mobile: kompakt, Desktop: normal */}
+            <div className="flex items-center gap-2 md:gap-4 rounded-2xl border border-orange-500/30 bg-gradient-to-br from-black via-orange-900/40 to-black shadow-lg shadow-orange-700/30 px-3 py-2 md:px-4 md:py-3 md:flex-1">
               <div>
                 <div className="text-xs text-zinc-400">Duo Coins</div>
                 <div 
@@ -1389,13 +1389,13 @@ export default function PlayerClient({ discordId }: { discordId: string }) {
               <img src="/badges/Duocoin.png" alt="Duo Coin" className="h-12 md:h-16 w-auto object-contain -ml-2 md:ml-0" />
             </div>
 
-            {/* Ranked - Mobile: Badge absolut positioniert rechts, Desktop: in Box */}
-            <div className="md:hidden absolute right-0 top-0 flex flex-col items-center pointer-events-none" style={{ width: '120px' }}>
+            {/* Ranked - Mobile: Badge rechts, Desktop: in Box */}
+            <div className="flex md:hidden flex-col items-center">
               <div 
                 className={`relative ${badgeEffects.className}`}
                 style={badgeEffects.style}
               >
-                <img src={rank.badge} alt={rank.label} className="h-40 w-auto object-contain" />
+                <img src={rank.badge} alt={rank.label} className="h-32 w-auto object-contain" />
                 {(rank.tier === "gold" || rank.tier === "platin" || rank.tier === "diamant" || rank.tier === "master") && (
                   <div 
                     className="absolute inset-0 pointer-events-none rounded-full"
@@ -1416,12 +1416,12 @@ export default function PlayerClient({ discordId }: { discordId: string }) {
                   />
                 )}
               </div>
-              <div className="text-center mt-1 w-full">
-                <div className="text-sm font-semibold text-zinc-100">
+              <div className="text-center mt-1">
+                <div className="text-sm font-semibold text-zinc-100" style={{ textShadow: '0 0 3px black, 0 0 5px black, 1px 1px 2px black' }}>
                   {rank.label}
                 </div>
                 {rank.value !== null && (
-                  <div className="text-xs text-zinc-300 mt-0.5">
+                  <div className="text-xs text-zinc-300 mt-0.5" style={{ textShadow: '0 0 3px black, 0 0 5px black, 1px 1px 2px black' }}>
                     {rank.value}
                   </div>
                 )}
