@@ -1359,7 +1359,7 @@ export default function PlayerClient({ discordId }: { discordId: string }) {
       <div className={`rounded-2xl p-6 ${headerEffects.className}`} style={headerEffects.style}>
         <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
           {/* Spieler Name + Badge (Mobile) */}
-          <div className="flex items-center gap-3 min-w-0">
+          <div className="flex items-start gap-3 min-w-0">
             <div className="min-w-0 flex-1">
               <div className="text-xs text-zinc-400">Spieler</div>
               <div className="truncate text-2xl font-semibold text-zinc-100" style={{ textShadow: '0 0 3px black, 0 0 5px black, 1px 1px 2px black' }}>
@@ -1368,31 +1368,48 @@ export default function PlayerClient({ discordId }: { discordId: string }) {
               <div className="mt-1 font-mono text-xs text-zinc-500">{player.discord_id}</div>
             </div>
             
-            {/* Badge neben Spielername - nur Mobile */}
-            <div 
-              className={`md:hidden relative flex-shrink-0 ${badgeEffects.className}`}
-              style={badgeEffects.style}
-            >
-              <img src={rank.badge} alt={rank.label} className="h-16 w-auto object-contain" />
-              {(rank.tier === "gold" || rank.tier === "platin" || rank.tier === "diamant" || rank.tier === "master") && (
-                <div 
-                  className="absolute inset-0 pointer-events-none rounded-full"
-                  style={{
-                    background: 'linear-gradient(90deg, transparent 0%, rgba(255, 255, 255, 0.5) 50%, transparent 100%)',
-                    backgroundSize: '200% 100%',
-                    animation: 'light-reflection 10s ease-in-out infinite',
-                    mixBlendMode: 'overlay',
-                    maskImage: `url(${rank.badge})`,
-                    WebkitMaskImage: `url(${rank.badge})`,
-                    maskSize: 'contain',
-                    WebkitMaskSize: 'contain',
-                    maskRepeat: 'no-repeat',
-                    WebkitMaskRepeat: 'no-repeat',
-                    maskPosition: 'center',
-                    WebkitMaskPosition: 'center',
-                  }}
-                />
-              )}
+            {/* Badge + Rank Info darunter - nur Mobile */}
+            <div className="md:hidden flex flex-col items-center flex-shrink-0">
+              <div 
+                className={`relative ${badgeEffects.className}`}
+                style={badgeEffects.style}
+              >
+                <img src={rank.badge} alt={rank.label} className="h-24 w-auto object-contain" />
+                {(rank.tier === "gold" || rank.tier === "platin" || rank.tier === "diamant" || rank.tier === "master") && (
+                  <div 
+                    className="absolute inset-0 pointer-events-none rounded-full"
+                    style={{
+                      background: 'linear-gradient(90deg, transparent 0%, rgba(255, 255, 255, 0.5) 50%, transparent 100%)',
+                      backgroundSize: '200% 100%',
+                      animation: 'light-reflection 10s ease-in-out infinite',
+                      mixBlendMode: 'overlay',
+                      maskImage: `url(${rank.badge})`,
+                      WebkitMaskImage: `url(${rank.badge})`,
+                      maskSize: 'contain',
+                      WebkitMaskSize: 'contain',
+                      maskRepeat: 'no-repeat',
+                      WebkitMaskRepeat: 'no-repeat',
+                      maskPosition: 'center',
+                      WebkitMaskPosition: 'center',
+                    }}
+                  />
+                )}
+              </div>
+              <div className="flex flex-col items-center mt-1">
+                <div className="text-sm font-semibold text-zinc-100 leading-tight text-center" style={{ textShadow: '0 0 3px black, 0 0 5px black, 1px 1px 2px black' }}>
+                  {rank.label}
+                </div>
+                {rank.value !== null && (
+                  <div className="text-xs text-zinc-300 mt-0.5 leading-tight" style={{ textShadow: '0 0 3px black, 0 0 5px black, 1px 1px 2px black' }}>
+                    {rank.value}
+                  </div>
+                )}
+                {!qualified && (
+                  <div className="text-xs text-zinc-500 mt-0.5 leading-tight text-center">
+                    {Math.max(0, 6 - clamp(player.games_ranked))} Spiele
+                  </div>
+                )}
+              </div>
             </div>
           </div>
 
@@ -1417,23 +1434,6 @@ export default function PlayerClient({ discordId }: { discordId: string }) {
                 </div>
               </div>
               <img src="/badges/Duocoin.png" alt="Duo Coin" className="h-12 md:h-16 w-auto object-contain -ml-2 md:ml-0" />
-            </div>
-
-            {/* Rank Text - nur Mobile, rechts neben Duo Coins */}
-            <div className="flex md:hidden flex-col justify-center">
-              <div className="text-sm font-semibold text-zinc-100 leading-tight" style={{ textShadow: '0 0 3px black, 0 0 5px black, 1px 1px 2px black' }}>
-                {rank.label}
-              </div>
-              {rank.value !== null && (
-                <div className="text-xs text-zinc-300 mt-0.5 leading-tight" style={{ textShadow: '0 0 3px black, 0 0 5px black, 1px 1px 2px black' }}>
-                  {rank.value}
-                </div>
-              )}
-              {!qualified && (
-                <div className="text-xs text-zinc-500 mt-0.5 leading-tight">
-                  {Math.max(0, 6 - clamp(player.games_ranked))} Spiele
-                </div>
-              )}
             </div>
 
             {/* Ranked - Desktop: in Box */}
