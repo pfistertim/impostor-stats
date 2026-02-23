@@ -1366,7 +1366,7 @@ export default function PlayerClient({ discordId }: { discordId: string }) {
             <div className="mt-1 font-mono text-xs text-zinc-500">{player.discord_id}</div>
           </div>
 
-          <div className="flex items-start gap-3 md:gap-4">
+          <div className="flex items-start gap-3 md:gap-4 relative">
             {/* Duo Coins */}
             <div className="flex items-center gap-2 md:gap-4 rounded-2xl border border-orange-500/30 bg-gradient-to-br from-black via-orange-900/40 to-black shadow-lg shadow-orange-700/30 px-3 py-2 md:px-4 md:py-3 flex-1">
               <div>
@@ -1389,8 +1389,8 @@ export default function PlayerClient({ discordId }: { discordId: string }) {
               <img src="/badges/Duocoin.png" alt="Duo Coin" className="h-12 md:h-16 w-auto object-contain -ml-2 md:ml-0" />
             </div>
 
-            {/* Ranked - Mobile: Badge außerhalb, Desktop: in Box */}
-            <div className="flex md:hidden flex-col items-center">
+            {/* Ranked - Mobile: Badge absolut positioniert rechts, Desktop: in Box */}
+            <div className="md:hidden absolute right-0 top-0 flex flex-col items-center pointer-events-none" style={{ width: '120px' }}>
               <div 
                 className={`relative ${badgeEffects.className}`}
                 style={badgeEffects.style}
@@ -1416,7 +1416,7 @@ export default function PlayerClient({ discordId }: { discordId: string }) {
                   />
                 )}
               </div>
-              <div className="text-center mt-1">
+              <div className="text-center mt-1 w-full">
                 <div className="text-sm font-semibold text-zinc-100">
                   {rank.label}
                 </div>
