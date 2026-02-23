@@ -1349,9 +1349,9 @@ export default function PlayerClient({ discordId }: { discordId: string }) {
       {/* Header */}
       <div className={`rounded-2xl p-6 ${headerEffects.className}`} style={headerEffects.style}>
         <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-          {/* Spieler Name + Badge (Mobile) */}
-          <div className="flex items-start justify-between gap-3 min-w-0">
-            <div className="min-w-0 flex-1">
+          {/* Spieler Name - Mobile: mit Badge rechts */}
+          <div className="flex items-start justify-between gap-3 md:block min-w-0">
+            <div className="min-w-0 flex-1 md:flex-none">
               <div className="text-xs text-zinc-400">Spieler</div>
               <div className="truncate text-2xl font-semibold text-zinc-100" style={{ textShadow: '0 0 3px black, 0 0 5px black, 1px 1px 2px black' }}>
                 {player.last_name ?? "Unbenannt"}
@@ -1426,9 +1426,10 @@ export default function PlayerClient({ discordId }: { discordId: string }) {
             </div>
           </div>
 
-          <div className="flex items-start gap-3 md:gap-4">
-            {/* Duo Coins - Desktop */}
-            <div className="hidden md:flex items-center gap-4 rounded-2xl border border-orange-500/30 bg-gradient-to-br from-black via-orange-900/40 to-black shadow-lg shadow-orange-700/30 px-4 py-3 flex-1">
+          {/* Desktop: Duo Coins + Rank nebeneinander */}
+          <div className="hidden md:flex items-center gap-4">
+            {/* Duo Coins */}
+            <div className="flex items-center gap-4 rounded-2xl border border-orange-500/30 bg-gradient-to-br from-black via-orange-900/40 to-black shadow-lg shadow-orange-700/30 px-4 py-3">
               <div>
                 <div className="text-xs text-zinc-400">Duo Coins</div>
                 <div 
@@ -1449,8 +1450,8 @@ export default function PlayerClient({ discordId }: { discordId: string }) {
               <img src="/badges/Duocoin.png" alt="Duo Coin" className="h-16 w-auto object-contain" />
             </div>
 
-            {/* Ranked - Desktop: in Box */}
-            <div className="hidden md:flex items-center gap-4 rounded-2xl border border-zinc-800 bg-zinc-950/40 px-4 py-3 flex-1">
+            {/* Ranked */}
+            <div className="flex items-center gap-4 rounded-2xl border border-zinc-800 bg-zinc-950/40 px-4 py-3">
               <div 
                 className={`relative ${badgeEffects.className}`}
                 style={badgeEffects.style}
@@ -1476,9 +1477,9 @@ export default function PlayerClient({ discordId }: { discordId: string }) {
                   />
                 )}
               </div>
-              <div className="min-w-0">
+              <div>
                 <div className="text-xs text-zinc-400">Rank</div>
-                <div className="text-xl font-semibold text-zinc-100 truncate">
+                <div className="text-xl font-semibold text-zinc-100">
                   {rank.label}
                   {rank.value !== null && <span className="ml-2">{rank.value}</span>}
                 </div>
