@@ -14,7 +14,7 @@ const geistMono = Geist_Mono({
 
 export const metadata: Metadata = {
   title: "Imposter Stats",
-  description: "Ranked Leaderboard und Statistiken für Imposter",
+  description: "Ranked Leaderboard, Duo Coins und Spielerstatistiken für Imposter",
 };
 
 export default function RootLayout({

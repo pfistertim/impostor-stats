@@ -176,17 +176,21 @@ function PlacementPill({ p }: { p: number }) {
     let mixedStyle: any = {};
     
     if (p === 1.5) {
-      // Gold + Silber Mix
+      // Gold + Silber Mix - mit subtiler Animation für Glanz (42% Gold, 38% Silber)
       mixedCls = "text-yellow-50 border-yellow-300/60 shadow-lg shadow-yellow-400/25";
       mixedStyle = {
-        backgroundImage: 'linear-gradient(135deg, #fbbf24, #f59e0b, #d1d5db, #9ca3af, #fbbf24)',
+        backgroundImage: 'linear-gradient(135deg, #fbbf24 0%, #f59e0b 14%, #fef3c7 28%, #fbbf24 42%, #d1d5db 62%, #f3f4f6 80%, #d1d5db 100%)',
+        backgroundSize: '200% 200%',
+        animation: 'gold-flow 8s ease-in-out infinite',
         textShadow: '0 0 2px rgba(0,0,0,0.8), 0 0 4px rgba(0,0,0,0.6)',
       };
     } else if (p === 2.5) {
-      // Silber + Bronze Mix
+      // Silber + Bronze Mix - mit subtiler Animation für Glanz
       mixedCls = "text-gray-50 border-gray-400/60 shadow-md shadow-gray-500/20";
       mixedStyle = {
-        backgroundImage: 'linear-gradient(135deg, #d1d5db, #9ca3af, #b45309, #d97706, #d1d5db)',
+        backgroundImage: 'linear-gradient(135deg, #d1d5db 0%, #9ca3af 20%, #f3f4f6 40%, #b45309 60%, #d97706 80%, #b45309 100%)',
+        backgroundSize: '200% 200%',
+        animation: 'silver-flow 8s ease-in-out infinite',
         textShadow: '0 0 2px rgba(0,0,0,0.8), 0 0 4px rgba(0,0,0,0.6)',
       };
     } else if (p === 3.5) {
@@ -205,10 +209,8 @@ function PlacementPill({ p }: { p: number }) {
       };
     }
     
-    // Verwende Animation des niedrigeren Platzes
-    const animationCls = lowerPlace === 1 ? "animate-subtle-pulse animate-gold-flow" : 
-                        lowerPlace === 2 ? "animate-silver-flow" :
-                        lowerPlace === 3 ? "animate-bronze-flow" : "";
+    // Subtile Animation für Glanz-Effekt
+    const animationCls = "animate-subtle-pulse";
     
     return (
       <span
@@ -232,7 +234,7 @@ function PlacementPill({ p }: { p: number }) {
       : p === 2
       ? "text-gray-50 border-gray-300/60 shadow-md shadow-gray-400/20"
       : p === 3
-      ? "text-amber-50 border-amber-600/60 shadow-md shadow-amber-700/20"
+      ? "text-amber-50 border-amber-600/60 shadow-md shadow-amber-700/30"
       : "bg-gradient-to-br from-red-800 via-red-900 to-red-950 text-red-50 border-red-700/50";
 
   const metalStyle = 
@@ -243,7 +245,9 @@ function PlacementPill({ p }: { p: number }) {
       backgroundImage: 'linear-gradient(135deg, #d1d5db, #9ca3af, #f3f4f6, #9ca3af, #d1d5db)',
       textShadow: '0 0 2px rgba(0,0,0,0.8), 0 0 4px rgba(0,0,0,0.6)',
     } : p === 3 ? {
-      backgroundImage: 'linear-gradient(135deg, #b45309, #d97706, #ca8a04, #d97706, #b45309)',
+      backgroundImage: 'linear-gradient(135deg, #92400e, #b45309, #d97706, #f59e0b, #d97706, #b45309, #92400e)',
+      backgroundSize: '200% 200%',
+      animation: 'bronze-flow 8s ease-in-out infinite',
       textShadow: '0 0 2px rgba(0,0,0,0.8), 0 0 4px rgba(0,0,0,0.6)',
     } : {
       textShadow: '0 0 2px rgba(0,0,0,0.8), 0 0 4px rgba(0,0,0,0.6)',
@@ -256,7 +260,7 @@ function PlacementPill({ p }: { p: number }) {
         "h-8 w-8 text-xs transition-all duration-300 hover:scale-110",
         p === 1 ? "animate-subtle-pulse animate-gold-flow" : 
         p === 2 ? "animate-silver-flow" :
-        p === 3 ? "animate-bronze-flow" : "",
+        p === 3 ? "animate-subtle-pulse" : "",
         cls,
       ].join(" ")}
       style={metalStyle}
@@ -277,17 +281,21 @@ function DuoPlacementPill({ p }: { p: number }) {
     let mixedStyle: any = {};
     
     if (p === 1.5) {
-      // Gold + Silber Mix
+      // Gold + Silber Mix - mit subtiler Animation für Glanz (42% Gold, 38% Silber)
       mixedCls = "text-yellow-50 border-yellow-300/60 shadow-lg shadow-yellow-400/25";
       mixedStyle = {
-        backgroundImage: 'linear-gradient(135deg, #fbbf24, #f59e0b, #d1d5db, #9ca3af, #fbbf24)',
+        backgroundImage: 'linear-gradient(135deg, #fbbf24 0%, #f59e0b 14%, #fef3c7 28%, #fbbf24 42%, #d1d5db 62%, #f3f4f6 80%, #d1d5db 100%)',
+        backgroundSize: '200% 200%',
+        animation: 'gold-flow 8s ease-in-out infinite',
         textShadow: '0 0 2px rgba(0,0,0,0.8), 0 0 4px rgba(0,0,0,0.6)',
       };
     } else if (p === 2.5) {
-      // Silber + Bronze Mix
+      // Silber + Bronze Mix - mit subtiler Animation für Glanz
       mixedCls = "text-gray-50 border-gray-400/60 shadow-md shadow-gray-500/20";
       mixedStyle = {
-        backgroundImage: 'linear-gradient(135deg, #d1d5db, #9ca3af, #b45309, #d97706, #d1d5db)',
+        backgroundImage: 'linear-gradient(135deg, #d1d5db 0%, #9ca3af 20%, #f3f4f6 40%, #b45309 60%, #d97706 80%, #b45309 100%)',
+        backgroundSize: '200% 200%',
+        animation: 'silver-flow 8s ease-in-out infinite',
         textShadow: '0 0 2px rgba(0,0,0,0.8), 0 0 4px rgba(0,0,0,0.6)',
       };
     } else if (p === 3.5) {
@@ -306,10 +314,8 @@ function DuoPlacementPill({ p }: { p: number }) {
       };
     }
     
-    // Verwende Animation des niedrigeren Platzes
-    const animationCls = lowerPlace === 1 ? "animate-subtle-pulse animate-gold-flow" : 
-                        lowerPlace === 2 ? "animate-silver-flow" :
-                        lowerPlace === 3 ? "animate-bronze-flow" : "";
+    // Subtile Animation für Glanz-Effekt
+    const animationCls = "animate-subtle-pulse";
     
     return (
       <span
@@ -333,7 +339,7 @@ function DuoPlacementPill({ p }: { p: number }) {
       : p === 2
       ? "text-gray-50 border-gray-300/60 shadow-md shadow-gray-400/20"
       : p === 3
-      ? "text-amber-50 border-amber-600/60 shadow-md shadow-amber-700/20"
+      ? "text-amber-50 border-amber-600/60 shadow-md shadow-amber-700/30"
       : "bg-gradient-to-br from-red-800 via-red-900 to-red-950 text-red-50 border-red-700/50";
 
   const metalStyle = 
@@ -344,7 +350,9 @@ function DuoPlacementPill({ p }: { p: number }) {
       backgroundImage: 'linear-gradient(135deg, #d1d5db, #9ca3af, #f3f4f6, #9ca3af, #d1d5db)',
       textShadow: '0 0 2px rgba(0,0,0,0.8), 0 0 4px rgba(0,0,0,0.6)',
     } : p === 3 ? {
-      backgroundImage: 'linear-gradient(135deg, #b45309, #d97706, #ca8a04, #d97706, #b45309)',
+      backgroundImage: 'linear-gradient(135deg, #92400e, #b45309, #d97706, #f59e0b, #d97706, #b45309, #92400e)',
+      backgroundSize: '200% 200%',
+      animation: 'bronze-flow 8s ease-in-out infinite',
       textShadow: '0 0 2px rgba(0,0,0,0.8), 0 0 4px rgba(0,0,0,0.6)',
     } : {
       textShadow: '0 0 2px rgba(0,0,0,0.8), 0 0 4px rgba(0,0,0,0.6)',
@@ -357,7 +365,7 @@ function DuoPlacementPill({ p }: { p: number }) {
         "h-8 w-8 text-xs transition-all duration-300 hover:scale-110",
         p === 1 ? "animate-subtle-pulse animate-gold-flow" : 
         p === 2 ? "animate-silver-flow" :
-        p === 3 ? "animate-bronze-flow" : "",
+        p === 3 ? "animate-subtle-pulse" : "",
         cls,
       ].join(" ")}
       style={metalStyle}

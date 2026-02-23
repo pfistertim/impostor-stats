@@ -386,13 +386,24 @@ function PlacementPill({ p }: { p: number }) {
     let mixedStyle: any = {};
     
     if (p === 1.5) {
-      // Gold + Silber Mix
+      // Gold + Silber Mix - mit subtiler Animation für Glanz (42% Gold, 38% Silber)
       mixedCls = "text-yellow-50 border-yellow-300/60 shadow-lg shadow-yellow-400/25";
       mixedStyle = {
-        backgroundImage: 'linear-gradient(135deg, #fbbf24, #f59e0b, #d1d5db, #9ca3af, #fbbf24)',
+        backgroundImage: 'linear-gradient(135deg, #fbbf24 0%, #f59e0b 14%, #fef3c7 28%, #fbbf24 42%, #d1d5db 62%, #f3f4f6 80%, #d1d5db 100%)',
+        backgroundSize: '200% 200%',
+        animation: 'gold-flow 8s ease-in-out infinite',
         textShadow: '0 0 2px rgba(0,0,0,0.8), 0 0 4px rgba(0,0,0,0.6)',
       };
     } else if (p === 2.5) {
+      // Silber + Bronze Mix - mit subtiler Animation für Glanz
+      mixedCls = "text-gray-50 border-gray-400/60 shadow-md shadow-gray-500/20";
+      mixedStyle = {
+        backgroundImage: 'linear-gradient(135deg, #d1d5db 0%, #9ca3af 20%, #f3f4f6 40%, #b45309 60%, #d97706 80%, #b45309 100%)',
+        backgroundSize: '200% 200%',
+        animation: 'silver-flow 8s ease-in-out infinite',
+        textShadow: '0 0 2px rgba(0,0,0,0.8), 0 0 4px rgba(0,0,0,0.6)',
+      };
+    } else if (p === 3.5) {
       // Silber + Bronze Mix
       mixedCls = "text-gray-50 border-gray-400/60 shadow-md shadow-gray-500/20";
       mixedStyle = {
@@ -415,10 +426,8 @@ function PlacementPill({ p }: { p: number }) {
       };
     }
     
-    // Verwende Animation des niedrigeren Platzes
-    const animationCls = lowerPlace === 1 ? "animate-subtle-pulse animate-gold-flow" : 
-                        lowerPlace === 2 ? "animate-silver-flow" :
-                        lowerPlace === 3 ? "animate-bronze-flow" : "";
+    // Subtile Animation für Glanz-Effekt
+    const animationCls = "animate-subtle-pulse";
     
     return (
       <span
@@ -442,7 +451,7 @@ function PlacementPill({ p }: { p: number }) {
       : p === 2
       ? "text-gray-50 border-gray-300/60 shadow-md shadow-gray-400/20"
       : p === 3
-      ? "text-amber-50 border-amber-600/60 shadow-md shadow-amber-700/20"
+      ? "text-amber-50 border-amber-600/60 shadow-md shadow-amber-700/30"
       : "bg-gradient-to-br from-red-800 via-red-900 to-red-950 text-red-50 border-red-700/50";
 
   const metalStyle = 
@@ -453,7 +462,9 @@ function PlacementPill({ p }: { p: number }) {
       backgroundImage: 'linear-gradient(135deg, #d1d5db, #9ca3af, #f3f4f6, #9ca3af, #d1d5db)',
       textShadow: '0 0 2px rgba(0,0,0,0.8), 0 0 4px rgba(0,0,0,0.6)',
     } : p === 3 ? {
-      backgroundImage: 'linear-gradient(135deg, #b45309, #d97706, #ca8a04, #d97706, #b45309)',
+      backgroundImage: 'linear-gradient(135deg, #92400e, #b45309, #d97706, #f59e0b, #d97706, #b45309, #92400e)',
+      backgroundSize: '200% 200%',
+      animation: 'bronze-flow 8s ease-in-out infinite',
       textShadow: '0 0 2px rgba(0,0,0,0.8), 0 0 4px rgba(0,0,0,0.6)',
     } : {
       textShadow: '0 0 2px rgba(0,0,0,0.8), 0 0 4px rgba(0,0,0,0.6)',
@@ -466,7 +477,7 @@ function PlacementPill({ p }: { p: number }) {
         "h-8 w-8 text-xs transition-all duration-300 hover:scale-110",
         p === 1 ? "animate-subtle-pulse animate-gold-flow" : 
         p === 2 ? "animate-silver-flow" :
-        p === 3 ? "animate-bronze-flow" : "",
+        p === 3 ? "animate-subtle-pulse" : "",
         cls,
       ].join(" ")}
       style={metalStyle}
@@ -1355,13 +1366,13 @@ export default function PlayerClient({ discordId }: { discordId: string }) {
             <div className="mt-1 font-mono text-xs text-zinc-500">{player.discord_id}</div>
           </div>
 
-          <div className="flex items-center gap-4">
+          <div className="flex items-center gap-3 md:gap-4">
             {/* Duo Coins */}
-            <div className="flex items-center gap-4 rounded-2xl border border-orange-500/30 bg-gradient-to-br from-black via-orange-900/40 to-black shadow-lg shadow-orange-700/30 px-4 py-3">
+            <div className="flex items-center gap-2 md:gap-4 rounded-2xl border border-orange-500/30 bg-gradient-to-br from-black via-orange-900/40 to-black shadow-lg shadow-orange-700/30 px-3 py-2 md:px-4 md:py-3 flex-1">
               <div>
                 <div className="text-xs text-zinc-400">Duo Coins</div>
                 <div 
-                  className="text-2xl font-bold animate-subtle-pulse animate-gold-flow"
+                  className="text-xl md:text-2xl font-bold animate-subtle-pulse animate-gold-flow"
                   style={{
                     fontFamily: '"Segoe UI", "Roboto", "Helvetica Neue", Arial, sans-serif',
                     backgroundImage: 'linear-gradient(135deg, #fbbf24, #f59e0b, #fef3c7, #f59e0b, #fbbf24)',
@@ -1375,16 +1386,16 @@ export default function PlayerClient({ discordId }: { discordId: string }) {
                   {clamp(player.duo_coins)}
                 </div>
               </div>
-              <img src="/badges/Duocoin.png" alt="Duo Coin" className="h-16 w-auto object-contain -ml-4 md:ml-0" />
+              <img src="/badges/Duocoin.png" alt="Duo Coin" className="h-12 md:h-16 w-auto object-contain -ml-2 md:ml-0" />
             </div>
 
             {/* Ranked */}
-            <div className="flex items-center gap-4 rounded-2xl border border-zinc-800 bg-zinc-950/40 px-4 py-3">
+            <div className="flex items-center gap-2 md:gap-4 rounded-2xl border border-zinc-800 bg-zinc-950/40 px-3 py-2 md:px-4 md:py-3 flex-1">
               <div 
                 className={`relative ${badgeEffects.className}`}
                 style={badgeEffects.style}
               >
-                <img src={rank.badge} alt={rank.label} className="h-48 md:h-28 w-auto object-contain" />
+                <img src={rank.badge} alt={rank.label} className="h-20 md:h-28 w-auto object-contain" />
                 {(rank.tier === "gold" || rank.tier === "platin" || rank.tier === "diamant" || rank.tier === "master") && (
                   <div 
                     className="absolute inset-0 pointer-events-none rounded-full"
@@ -1405,15 +1416,15 @@ export default function PlayerClient({ discordId }: { discordId: string }) {
                   />
                 )}
               </div>
-              <div>
+              <div className="min-w-0">
                 <div className="text-xs text-zinc-400">Rank</div>
-                <div className="text-xl font-semibold text-zinc-100">
+                <div className="text-base md:text-xl font-semibold text-zinc-100 truncate">
                   {rank.label}
-                  {rank.value !== null && <span className="ml-2">{rank.value}</span>}
+                  {rank.value !== null && <span className="ml-1 md:ml-2">{rank.value}</span>}
                 </div>
                 {!qualified && (
                   <div className="mt-1 text-xs text-zinc-500">
-                    Noch {Math.max(0, 6 - clamp(player.games_ranked))} Ranked-Spiele bis sichtbar
+                    {Math.max(0, 6 - clamp(player.games_ranked))} Spiele
                   </div>
                 )}
               </div>
@@ -1533,12 +1544,12 @@ export default function PlayerClient({ discordId }: { discordId: string }) {
           <table className="w-full text-left text-sm">
             <thead className="text-xs text-zinc-400">
               <tr>
-                <th className="py-2">Datum</th>
-                <th className="py-2">Modus</th>
-                <th className="py-2">Platz</th>
-                <th className="py-2 hidden md:table-cell">Punkte</th>
-                <th className="py-2">Elo/Coins</th>
-                <th className="py-2">Details</th>
+                <th className="py-2 pr-2">Datum</th>
+                <th className="py-2 px-1">Modus</th>
+                <th className="py-2 px-1">Platz</th>
+                <th className="py-2 px-1 hidden md:table-cell">Punkte</th>
+                <th className="py-2 px-1">Elo/Coins</th>
+                <th className="py-2 pl-2">Details</th>
               </tr>
             </thead>
 
@@ -1551,18 +1562,18 @@ export default function PlayerClient({ discordId }: { discordId: string }) {
                 return (
                   <Fragment key={`match-${row.match_id}`}>
                     <tr className="border-t border-zinc-800">
-                      <td className="py-2">
-                        <span className="inline-block px-2 py-1 rounded text-xs font-semibold bg-gradient-to-r from-zinc-700/80 to-zinc-600/80 border border-zinc-400/40 text-zinc-100">
+                      <td className="py-2 pr-2">
+                        <span className="inline-block px-1.5 py-1 rounded text-xs font-semibold bg-gradient-to-r from-zinc-700/80 to-zinc-600/80 border border-zinc-400/40 text-zinc-100">
                           {fmtDateTime(meta?.started_at)}
                         </span>
                       </td>
-                      <td className="py-2">
+                      <td className="py-2 px-1">
                         <span className={
                           meta?.mode === "ranked" 
-                            ? "inline-block px-2 py-1 rounded text-xs font-semibold bg-gradient-to-r from-blue-900/60 to-blue-800/60 border border-blue-500/30 text-blue-100"
+                            ? "inline-block px-1.5 py-1 rounded text-xs font-semibold bg-gradient-to-r from-blue-900/60 to-blue-800/60 border border-blue-500/30 text-blue-100"
                             : meta?.mode === "duo"
-                            ? "inline-block px-2 py-1 rounded text-xs font-semibold bg-gradient-to-r from-orange-900/60 to-orange-800/60 border border-orange-500/30 text-orange-100"
-                            : "inline-block px-2 py-1 rounded text-xs font-semibold bg-gradient-to-r from-gray-800/60 to-gray-700/60 border border-gray-500/30 text-gray-100"
+                            ? "inline-block px-1.5 py-1 rounded text-xs font-semibold bg-gradient-to-r from-orange-900/60 to-orange-800/60 border border-orange-500/30 text-orange-100"
+                            : "inline-block px-1.5 py-1 rounded text-xs font-semibold bg-gradient-to-r from-gray-800/60 to-gray-700/60 border border-gray-500/30 text-gray-100"
                         }>
                           {meta?.mode ?? "—"}
                         </span>
@@ -1582,9 +1593,9 @@ export default function PlayerClient({ discordId }: { discordId: string }) {
                           );
                         })()}
                       </td>
-                      <td className="py-2">
+                      <td className="py-2 px-1">
                         {meta?.aborted_reason ? (
-                          <span className="inline-flex items-center justify-center rounded-md border border-zinc-700 bg-black font-semibold h-8 w-8 text-xs text-zinc-400">
+                          <span className="inline-flex items-center justify-center rounded-md border border-zinc-700 bg-black font-semibold h-7 w-7 text-xs text-zinc-400">
                             X
                           </span>
                         ) : row.placement ? (
@@ -1593,33 +1604,33 @@ export default function PlayerClient({ discordId }: { discordId: string }) {
                           "—"
                         )}
                       </td>
-                      <td className="py-2 hidden md:table-cell">
-                        <span className="inline-block px-2 py-1 rounded text-xs font-semibold bg-gradient-to-r from-zinc-700/80 to-zinc-600/80 border border-zinc-400/40 text-zinc-100">
+                      <td className="py-2 px-1 hidden md:table-cell">
+                        <span className="inline-block px-1.5 py-1 rounded text-xs font-semibold bg-gradient-to-r from-zinc-700/80 to-zinc-600/80 border border-zinc-400/40 text-zinc-100">
                           {row.total_points ?? "—"}
                         </span>
                       </td>
-                      <td className="py-2">
+                      <td className="py-2 px-1">
                         {meta?.mode === "zwanglos" ? (
-                          <span className="text-zinc-400">—</span>
+                          <span className="text-zinc-400 text-xs">—</span>
                         ) : meta?.mode === "duo" ? (
                           (() => {
                             const coins = row.duo_coins_delta ?? 0;
                             if (coins === 0) {
                               return (
-                                <span className="inline-block px-2 py-1 rounded text-xs font-semibold bg-gradient-to-r from-zinc-700/80 to-zinc-600/80 border border-zinc-400/40 text-zinc-400">
+                                <span className="inline-block px-1.5 py-0.5 rounded text-xs font-semibold bg-gradient-to-r from-zinc-700/80 to-zinc-600/80 border border-zinc-400/40 text-zinc-400">
                                   0
                                 </span>
                               );
                             }
                             return (
-                              <span className="inline-block px-2 py-1 rounded text-xs font-semibold bg-gradient-to-r from-orange-900/60 to-orange-800/60 border border-orange-500/30 text-orange-100">
+                              <span className="inline-block px-1.5 py-0.5 rounded text-xs font-semibold bg-gradient-to-r from-orange-900/60 to-orange-800/60 border border-orange-500/30 text-orange-100">
                                 {coins >= 0 ? "+" : ""}{coins}
                               </span>
                             );
                           })()
                         ) : (typeof row.ranked_games_played === 'number' && row.ranked_games_played < 6) ? (
                           <span 
-                            className="inline-block px-2 py-1 rounded text-xs font-semibold bg-gradient-to-r from-zinc-700/80 to-zinc-600/80 border border-zinc-400/40 text-zinc-100 cursor-help"
+                            className="inline-block px-1.5 py-0.5 rounded text-xs font-semibold bg-gradient-to-r from-zinc-700/80 to-zinc-600/80 border border-zinc-400/40 text-zinc-100 cursor-help"
                             title="Elo nicht einsehbar weil der Spieler noch unranked ist"
                           >
                             ?
@@ -1629,7 +1640,7 @@ export default function PlayerClient({ discordId }: { discordId: string }) {
                             const elo = row.elo_delta ?? 0;
                             if (elo === 0) {
                               return (
-                                <span className="inline-block px-2 py-1 rounded text-xs font-semibold bg-gradient-to-r from-zinc-700/80 to-zinc-600/80 border border-zinc-400/40 text-zinc-400">
+                                <span className="inline-block px-1.5 py-0.5 rounded text-xs font-semibold bg-gradient-to-r from-zinc-700/80 to-zinc-600/80 border border-zinc-400/40 text-zinc-400">
                                   0
                                 </span>
                               );
@@ -1637,8 +1648,8 @@ export default function PlayerClient({ discordId }: { discordId: string }) {
                             return (
                               <span className={
                                 elo >= 0
-                                  ? "inline-block px-2 py-1 rounded text-xs font-semibold bg-gradient-to-r from-green-900/60 to-green-800/60 border border-green-500/30 text-green-100"
-                                  : "inline-block px-2 py-1 rounded text-xs font-semibold bg-gradient-to-r from-red-900/60 to-red-800/60 border border-red-500/30 text-red-100"
+                                  ? "inline-block px-1.5 py-0.5 rounded text-xs font-semibold bg-gradient-to-r from-green-900/60 to-green-800/60 border border-green-500/30 text-green-100"
+                                  : "inline-block px-1.5 py-0.5 rounded text-xs font-semibold bg-gradient-to-r from-red-900/60 to-red-800/60 border border-red-500/30 text-red-100"
                               }>
                                 {elo >= 0 ? "+" : ""}{elo}
                               </span>
@@ -1646,9 +1657,9 @@ export default function PlayerClient({ discordId }: { discordId: string }) {
                           })()
                         )}
                       </td>
-                      <td className="py-2">
+                      <td className="py-2 pl-2">
                         <button
-                          className="rounded-lg border border-zinc-700 bg-zinc-950/30 px-2 py-1 text-xs hover:bg-zinc-950/60"
+                          className="rounded-lg border border-zinc-700 bg-zinc-950/30 px-2 py-0.5 text-xs hover:bg-zinc-950/60"
                           onClick={() => toggleMatch(row.match_id)}
                         >
                           {isOpen ? "schließen" : "anzeigen"}
@@ -1659,7 +1670,7 @@ export default function PlayerClient({ discordId }: { discordId: string }) {
                     {isOpen && (
                       <tr className="border-t border-zinc-800">
                         <td colSpan={6} className="py-3">
-                          <div className="space-y-4">
+                          <div className="space-y-6">
                             {/* Match Info Header */}
                             <div className="flex items-center gap-3 px-4">
                               <span className="text-sm text-zinc-400">Modus:</span>
