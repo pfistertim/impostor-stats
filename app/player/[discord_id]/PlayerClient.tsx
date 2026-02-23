@@ -377,8 +377,6 @@ function getBadgeEffects(tier: "unranked" | "eisen" | "bronze" | "silver" | "gol
 function PlacementPill({ p }: { p: number }) {
   // Prüfe ob es eine .5 Platzierung ist
   const isHalf = p % 1 === 0.5;
-  const lowerPlace = Math.floor(p);
-  const upperPlace = Math.ceil(p);
   
   if (isHalf) {
     // Mische die Farben der beiden Plätze
@@ -404,13 +402,6 @@ function PlacementPill({ p }: { p: number }) {
         textShadow: '0 0 2px rgba(0,0,0,0.8), 0 0 4px rgba(0,0,0,0.6)',
       };
     } else if (p === 3.5) {
-      // Silber + Bronze Mix
-      mixedCls = "text-gray-50 border-gray-400/60 shadow-md shadow-gray-500/20";
-      mixedStyle = {
-        backgroundImage: 'linear-gradient(135deg, #d1d5db, #9ca3af, #b45309, #d97706, #d1d5db)',
-        textShadow: '0 0 2px rgba(0,0,0,0.8), 0 0 4px rgba(0,0,0,0.6)',
-      };
-    } else if (p === 3.5) {
       // Bronze + Rot Mix
       mixedCls = "text-amber-50 border-amber-700/60 shadow-md shadow-amber-800/20";
       mixedStyle = {
@@ -418,7 +409,7 @@ function PlacementPill({ p }: { p: number }) {
         textShadow: '0 0 2px rgba(0,0,0,0.8), 0 0 4px rgba(0,0,0,0.6)',
       };
     } else {
-      // Fallback für andere .5 Platzierungen (z.B. 4.5, 5.5, etc.)
+      // Fallback für andere .5 Platzierungen
       mixedCls = "text-red-50 border-red-700/60 shadow-md shadow-red-800/20";
       mixedStyle = {
         backgroundImage: 'linear-gradient(135deg, #991b1b, #7f1d1d, #450a0a, #7f1d1d, #991b1b)',
