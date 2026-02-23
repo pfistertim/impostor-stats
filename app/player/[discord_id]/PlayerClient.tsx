@@ -1359,13 +1359,35 @@ export default function PlayerClient({ discordId }: { discordId: string }) {
       <div className={`rounded-2xl p-6 ${headerEffects.className}`} style={headerEffects.style}>
         <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
           {/* Spieler Name + Badge (Mobile) */}
-          <div className="flex items-start gap-3 min-w-0">
+          <div className="flex items-start justify-between gap-3 min-w-0">
             <div className="min-w-0 flex-1">
               <div className="text-xs text-zinc-400">Spieler</div>
               <div className="truncate text-2xl font-semibold text-zinc-100" style={{ textShadow: '0 0 3px black, 0 0 5px black, 1px 1px 2px black' }}>
                 {player.last_name ?? "Unbenannt"}
               </div>
               <div className="mt-1 font-mono text-xs text-zinc-500">{player.discord_id}</div>
+              
+              {/* Duo Coins - nur Mobile, unter dem Spielernamen */}
+              <div className="md:hidden mt-3 flex items-center gap-2 rounded-2xl border border-orange-500/30 bg-gradient-to-br from-black via-orange-900/40 to-black shadow-lg shadow-orange-700/30 px-3 py-2 w-fit">
+                <div>
+                  <div className="text-xs text-zinc-400">Duo Coins</div>
+                  <div 
+                    className="text-xl font-bold animate-subtle-pulse animate-gold-flow"
+                    style={{
+                      fontFamily: '"Segoe UI", "Roboto", "Helvetica Neue", Arial, sans-serif',
+                      backgroundImage: 'linear-gradient(135deg, #fbbf24, #f59e0b, #fef3c7, #f59e0b, #fbbf24)',
+                      backgroundClip: 'text',
+                      WebkitBackgroundClip: 'text',
+                      WebkitTextFillColor: 'transparent',
+                      letterSpacing: '0.02em',
+                      filter: 'drop-shadow(0 0 3px rgba(0,0,0,0.9)) drop-shadow(0 0 6px rgba(0,0,0,0.7))',
+                    }}
+                  >
+                    {clamp(player.duo_coins)}
+                  </div>
+                </div>
+                <img src="/badges/Duocoin.png" alt="Duo Coin" className="h-12 w-auto object-contain -ml-2" />
+              </div>
             </div>
             
             {/* Badge + Rank Info darunter - nur Mobile */}
@@ -1414,12 +1436,12 @@ export default function PlayerClient({ discordId }: { discordId: string }) {
           </div>
 
           <div className="flex items-start gap-3 md:gap-4">
-            {/* Duo Coins - Mobile: kompakt, Desktop: normal */}
-            <div className="flex items-center gap-2 md:gap-4 rounded-2xl border border-orange-500/30 bg-gradient-to-br from-black via-orange-900/40 to-black shadow-lg shadow-orange-700/30 px-3 py-2 md:px-4 md:py-3 md:flex-1">
+            {/* Duo Coins - Desktop */}
+            <div className="hidden md:flex items-center gap-4 rounded-2xl border border-orange-500/30 bg-gradient-to-br from-black via-orange-900/40 to-black shadow-lg shadow-orange-700/30 px-4 py-3 flex-1">
               <div>
                 <div className="text-xs text-zinc-400">Duo Coins</div>
                 <div 
-                  className="text-xl md:text-2xl font-bold animate-subtle-pulse animate-gold-flow"
+                  className="text-2xl font-bold animate-subtle-pulse animate-gold-flow"
                   style={{
                     fontFamily: '"Segoe UI", "Roboto", "Helvetica Neue", Arial, sans-serif',
                     backgroundImage: 'linear-gradient(135deg, #fbbf24, #f59e0b, #fef3c7, #f59e0b, #fbbf24)',
@@ -1433,7 +1455,7 @@ export default function PlayerClient({ discordId }: { discordId: string }) {
                   {clamp(player.duo_coins)}
                 </div>
               </div>
-              <img src="/badges/Duocoin.png" alt="Duo Coin" className="h-12 md:h-16 w-auto object-contain -ml-2 md:ml-0" />
+              <img src="/badges/Duocoin.png" alt="Duo Coin" className="h-16 w-auto object-contain" />
             </div>
 
             {/* Ranked - Desktop: in Box */}
