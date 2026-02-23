@@ -1366,7 +1366,7 @@ export default function PlayerClient({ discordId }: { discordId: string }) {
             <div className="mt-1 font-mono text-xs text-zinc-500">{player.discord_id}</div>
           </div>
 
-          <div className="flex items-center gap-3 md:gap-4">
+          <div className="flex items-start gap-3 md:gap-4">
             {/* Duo Coins */}
             <div className="flex items-center gap-2 md:gap-4 rounded-2xl border border-orange-500/30 bg-gradient-to-br from-black via-orange-900/40 to-black shadow-lg shadow-orange-700/30 px-3 py-2 md:px-4 md:py-3 flex-1">
               <div>
@@ -1389,13 +1389,57 @@ export default function PlayerClient({ discordId }: { discordId: string }) {
               <img src="/badges/Duocoin.png" alt="Duo Coin" className="h-12 md:h-16 w-auto object-contain -ml-2 md:ml-0" />
             </div>
 
-            {/* Ranked */}
-            <div className="flex items-center gap-2 md:gap-4 rounded-2xl border border-zinc-800 bg-zinc-950/40 px-3 py-2 md:px-4 md:py-3 flex-1">
+            {/* Ranked - Mobile: Badge außerhalb, Desktop: in Box */}
+            <div className="flex md:hidden flex-col items-center">
               <div 
                 className={`relative ${badgeEffects.className}`}
                 style={badgeEffects.style}
               >
-                <img src={rank.badge} alt={rank.label} className="h-20 md:h-28 w-auto object-contain" />
+                <img src={rank.badge} alt={rank.label} className="h-40 w-auto object-contain" />
+                {(rank.tier === "gold" || rank.tier === "platin" || rank.tier === "diamant" || rank.tier === "master") && (
+                  <div 
+                    className="absolute inset-0 pointer-events-none rounded-full"
+                    style={{
+                      background: 'linear-gradient(90deg, transparent 0%, rgba(255, 255, 255, 0.5) 50%, transparent 100%)',
+                      backgroundSize: '200% 100%',
+                      animation: 'light-reflection 10s ease-in-out infinite',
+                      mixBlendMode: 'overlay',
+                      maskImage: `url(${rank.badge})`,
+                      WebkitMaskImage: `url(${rank.badge})`,
+                      maskSize: 'contain',
+                      WebkitMaskSize: 'contain',
+                      maskRepeat: 'no-repeat',
+                      WebkitMaskRepeat: 'no-repeat',
+                      maskPosition: 'center',
+                      WebkitMaskPosition: 'center',
+                    }}
+                  />
+                )}
+              </div>
+              <div className="text-center mt-1">
+                <div className="text-sm font-semibold text-zinc-100">
+                  {rank.label}
+                </div>
+                {rank.value !== null && (
+                  <div className="text-xs text-zinc-300 mt-0.5">
+                    {rank.value}
+                  </div>
+                )}
+                {!qualified && (
+                  <div className="text-xs text-zinc-500 mt-0.5">
+                    {Math.max(0, 6 - clamp(player.games_ranked))} Spiele
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Ranked - Desktop: in Box */}
+            <div className="hidden md:flex items-center gap-4 rounded-2xl border border-zinc-800 bg-zinc-950/40 px-4 py-3 flex-1">
+              <div 
+                className={`relative ${badgeEffects.className}`}
+                style={badgeEffects.style}
+              >
+                <img src={rank.badge} alt={rank.label} className="h-28 w-auto object-contain" />
                 {(rank.tier === "gold" || rank.tier === "platin" || rank.tier === "diamant" || rank.tier === "master") && (
                   <div 
                     className="absolute inset-0 pointer-events-none rounded-full"
@@ -1418,13 +1462,13 @@ export default function PlayerClient({ discordId }: { discordId: string }) {
               </div>
               <div className="min-w-0">
                 <div className="text-xs text-zinc-400">Rank</div>
-                <div className="text-base md:text-xl font-semibold text-zinc-100 truncate">
+                <div className="text-xl font-semibold text-zinc-100 truncate">
                   {rank.label}
-                  {rank.value !== null && <span className="ml-1 md:ml-2">{rank.value}</span>}
+                  {rank.value !== null && <span className="ml-2">{rank.value}</span>}
                 </div>
                 {!qualified && (
                   <div className="mt-1 text-xs text-zinc-500">
-                    {Math.max(0, 6 - clamp(player.games_ranked))} Spiele
+                    Noch {Math.max(0, 6 - clamp(player.games_ranked))} Ranked-Spiele bis sichtbar
                   </div>
                 )}
               </div>
@@ -1548,7 +1592,7 @@ export default function PlayerClient({ discordId }: { discordId: string }) {
                 <th className="py-2 px-1">Modus</th>
                 <th className="py-2 px-1">Platz</th>
                 <th className="py-2 px-1 hidden md:table-cell">Punkte</th>
-                <th className="py-2 px-1">Elo/Coins</th>
+                <th className="py-2 px-1 hidden md:table-cell">Elo/Coins</th>
                 <th className="py-2 pl-2">Details</th>
               </tr>
             </thead>
@@ -1609,7 +1653,7 @@ export default function PlayerClient({ discordId }: { discordId: string }) {
                           {row.total_points ?? "—"}
                         </span>
                       </td>
-                      <td className="py-2 px-1">
+                      <td className="py-2 px-1 hidden md:table-cell">
                         {meta?.mode === "zwanglos" ? (
                           <span className="text-zinc-400 text-xs">—</span>
                         ) : meta?.mode === "duo" ? (
