@@ -1375,7 +1375,7 @@ export default function PlayerClient({ discordId }: { discordId: string }) {
                   {clamp(player.duo_coins)}
                 </div>
               </div>
-              <img src="/badges/Duocoin.png" alt="Duo Coin" className="h-16 w-auto object-contain" />
+              <img src="/badges/Duocoin.png" alt="Duo Coin" className="h-16 w-auto object-contain -ml-4 md:ml-0" />
             </div>
 
             {/* Ranked */}
@@ -1384,7 +1384,7 @@ export default function PlayerClient({ discordId }: { discordId: string }) {
                 className={`relative ${badgeEffects.className}`}
                 style={badgeEffects.style}
               >
-                <img src={rank.badge} alt={rank.label} className="h-28 w-auto object-contain" />
+                <img src={rank.badge} alt={rank.label} className="h-48 md:h-28 w-auto object-contain" />
                 {(rank.tier === "gold" || rank.tier === "platin" || rank.tier === "diamant" || rank.tier === "master") && (
                   <div 
                     className="absolute inset-0 pointer-events-none rounded-full"
@@ -1536,7 +1536,7 @@ export default function PlayerClient({ discordId }: { discordId: string }) {
                 <th className="py-2">Datum</th>
                 <th className="py-2">Modus</th>
                 <th className="py-2">Platz</th>
-                <th className="py-2">Punkte</th>
+                <th className="py-2 hidden md:table-cell">Punkte</th>
                 <th className="py-2">Elo/Coins</th>
                 <th className="py-2">Details</th>
               </tr>
@@ -1593,7 +1593,7 @@ export default function PlayerClient({ discordId }: { discordId: string }) {
                           "—"
                         )}
                       </td>
-                      <td className="py-2">
+                      <td className="py-2 hidden md:table-cell">
                         <span className="inline-block px-2 py-1 rounded text-xs font-semibold bg-gradient-to-r from-zinc-700/80 to-zinc-600/80 border border-zinc-400/40 text-zinc-100">
                           {row.total_points ?? "—"}
                         </span>
@@ -1722,131 +1722,175 @@ export default function PlayerClient({ discordId }: { discordId: string }) {
                                 }
                                 
                                 return (
-                                  <div className="overflow-x-auto">
-                                    <table className="w-full text-sm">
-                                      <thead className="text-xs text-zinc-400">
-                                        <tr>
-                                          <th className="text-left py-2 px-2">
-                                            <span className="inline-block px-2 py-1 rounded text-xs font-semibold bg-gradient-to-r from-zinc-700/80 to-zinc-600/80 border border-zinc-400/40 text-zinc-100">
-                                              Runde
-                                            </span>
-                                          </th>
-                                          <th className="py-2 px-2">
-                                            <span className="inline-block px-2 py-1 rounded text-xs font-semibold bg-gradient-to-r from-zinc-700/80 to-zinc-600/80 border border-zinc-400/40 text-zinc-100">
-                                              Imposter
-                                            </span>
-                                          </th>
-                                          <th className="py-2 px-2">
-                                            <span className="inline-block px-2 py-1 rounded text-xs font-semibold bg-gradient-to-r from-zinc-700/80 to-zinc-600/80 border border-zinc-400/40 text-zinc-100">
-                                              Gewinner
-                                            </span>
-                                          </th>
-                                          <th className="py-2 px-2">
-                                            <span className="inline-block px-2 py-1 rounded text-xs font-semibold bg-gradient-to-r from-zinc-700/80 to-zinc-600/80 border border-zinc-400/40 text-zinc-100">
-                                              Methode
-                                            </span>
-                                          </th>
-                                          <th className="py-2 px-2">
-                                            <span className="inline-block px-2 py-1 rounded text-xs font-semibold bg-gradient-to-r from-zinc-700/80 to-zinc-600/80 border border-zinc-400/40 text-zinc-100">
-                                              Kategorie
-                                            </span>
-                                          </th>
-                                          <th className="py-2 px-2">
-                                            <span className="inline-block px-2 py-1 rounded text-xs font-semibold bg-gradient-to-r from-zinc-700/80 to-zinc-600/80 border border-zinc-400/40 text-zinc-100">
-                                              Wort
-                                            </span>
-                                          </th>
-                                          <th className="py-2 px-2">
-                                            <span className="inline-block px-2 py-1 rounded text-xs font-semibold bg-gradient-to-r from-zinc-700/80 to-zinc-600/80 border border-zinc-400/40 text-zinc-100">
-                                              Punkte I
-                                            </span>
-                                          </th>
-                                          <th className="py-2 px-2">
-                                            <span className="inline-block px-2 py-1 rounded text-xs font-semibold bg-gradient-to-r from-zinc-700/80 to-zinc-600/80 border border-zinc-400/40 text-zinc-100">
-                                              Punkte U
-                                            </span>
-                                          </th>
-                                        </tr>
-                                      </thead>
-                                      <tbody>
-                                        {allRounds.map((rr) => {
-                                          // Prüfe ob es eine abgebrochene Runde ist
-                                          if ('isAborted' in rr && rr.isAborted) {
+                                  <>
+                                    {/* Mobile: Card Layout */}
+                                    <div className="md:hidden space-y-3">
+                                      {allRounds.map((rr) => {
+                                        // Prüfe ob es eine abgebrochene Runde ist
+                                        if ('isAborted' in rr && rr.isAborted) {
+                                          return (
+                                            <div key={`aborted-${rr.round_no}`} className="rounded-lg border border-zinc-700 bg-zinc-900/50 p-3 opacity-60">
+                                              <div className="text-xs font-semibold text-zinc-300 mb-2">Runde {rr.round_no}</div>
+                                              <div className="text-xs text-orange-300">
+                                                Abgebrochen wegen: {formatAbortReason(abortedReason)}
+                                              </div>
+                                            </div>
+                                          );
+                                        }
+                                        
+                                        const round = rr as RoundRow;
+                                        const pointsImposter = round.aborted ? 0 : (round.winner === "imposter" ? 2 : 0);
+                                        const pointsUnschuldig = round.aborted ? 0 : (round.winner === "imposter" ? 0 : 1);
+                                        const imposterDisplay = meta?.mode === "duo" && round.imposter_team_index != null
+                                          ? `Team ${round.imposter_team_index + 1}`
+                                          : (round.imposter_name ?? "—");
+                                        
+                                        return (
+                                          <div key={round.id} className={`rounded-lg border border-zinc-700 bg-zinc-900/50 p-3 ${round.aborted ? 'opacity-50' : ''}`}>
+                                            <div className="text-xs font-semibold text-zinc-300 mb-2">
+                                              Runde {round.round_no}{round.aborted ? ' ⚠️' : ''}
+                                            </div>
+                                            <div className="space-y-1 text-xs text-zinc-400">
+                                              <div><span className="text-zinc-500">Imposter:</span> <span className="text-red-300">{imposterDisplay}</span></div>
+                                              <div><span className="text-zinc-500">Gewinner:</span> <span className="text-zinc-200">{round.aborted ? 'Abgebrochen' : winnerLabel(round.winner)}</span></div>
+                                              <div><span className="text-zinc-500">Methode:</span> <span className="text-zinc-200">{round.aborted ? (round.aborted_reason ?? '—') : winMethodLabel(round.win_method)}</span></div>
+                                              <div><span className="text-zinc-500">Kategorie:</span> <span className="text-zinc-200">{formatCategoryName(round.categoryName)}</span></div>
+                                              <div><span className="text-zinc-500">Wort:</span> <span className="text-zinc-200">{round.word ?? "—"}</span></div>
+                                              <div><span className="text-zinc-500">Punkte Imposter:</span> <span className="text-zinc-200">{round.aborted ? '—' : pointsImposter}</span></div>
+                                              <div><span className="text-zinc-500">Punkte Unschuldig:</span> <span className="text-zinc-200">{round.aborted ? '—' : pointsUnschuldig}</span></div>
+                                            </div>
+                                          </div>
+                                        );
+                                      })}
+                                    </div>
+
+                                    {/* Desktop: Table Layout */}
+                                    <div className="hidden md:block overflow-x-auto">
+                                      <table className="w-full text-sm">
+                                        <thead className="text-xs text-zinc-400">
+                                          <tr>
+                                            <th className="text-left py-2 px-2">
+                                              <span className="inline-block px-2 py-1 rounded text-xs font-semibold bg-gradient-to-r from-zinc-700/80 to-zinc-600/80 border border-zinc-400/40 text-zinc-100">
+                                                Runde
+                                              </span>
+                                            </th>
+                                            <th className="py-2 px-2">
+                                              <span className="inline-block px-2 py-1 rounded text-xs font-semibold bg-gradient-to-r from-zinc-700/80 to-zinc-600/80 border border-zinc-400/40 text-zinc-100">
+                                                Imposter
+                                              </span>
+                                            </th>
+                                            <th className="py-2 px-2">
+                                              <span className="inline-block px-2 py-1 rounded text-xs font-semibold bg-gradient-to-r from-zinc-700/80 to-zinc-600/80 border border-zinc-400/40 text-zinc-100">
+                                                Gewinner
+                                              </span>
+                                            </th>
+                                            <th className="py-2 px-2">
+                                              <span className="inline-block px-2 py-1 rounded text-xs font-semibold bg-gradient-to-r from-zinc-700/80 to-zinc-600/80 border border-zinc-400/40 text-zinc-100">
+                                                Methode
+                                              </span>
+                                            </th>
+                                            <th className="py-2 px-2">
+                                              <span className="inline-block px-2 py-1 rounded text-xs font-semibold bg-gradient-to-r from-zinc-700/80 to-zinc-600/80 border border-zinc-400/40 text-zinc-100">
+                                                Kategorie
+                                              </span>
+                                            </th>
+                                            <th className="py-2 px-2">
+                                              <span className="inline-block px-2 py-1 rounded text-xs font-semibold bg-gradient-to-r from-zinc-700/80 to-zinc-600/80 border border-zinc-400/40 text-zinc-100">
+                                                Wort
+                                              </span>
+                                            </th>
+                                            <th className="py-2 px-2">
+                                              <span className="inline-block px-2 py-1 rounded text-xs font-semibold bg-gradient-to-r from-zinc-700/80 to-zinc-600/80 border border-zinc-400/40 text-zinc-100">
+                                                Punkte I
+                                              </span>
+                                            </th>
+                                            <th className="py-2 px-2">
+                                              <span className="inline-block px-2 py-1 rounded text-xs font-semibold bg-gradient-to-r from-zinc-700/80 to-zinc-600/80 border border-zinc-400/40 text-zinc-100">
+                                                Punkte U
+                                              </span>
+                                            </th>
+                                          </tr>
+                                        </thead>
+                                        <tbody>
+                                          {allRounds.map((rr) => {
+                                            // Prüfe ob es eine abgebrochene Runde ist
+                                            if ('isAborted' in rr && rr.isAborted) {
+                                              return (
+                                                <tr key={`aborted-${rr.round_no}`} className="border-t border-zinc-800 opacity-60">
+                                                  <td className="py-2 px-2">
+                                                    <span className="inline-block px-2 py-1 rounded text-xs font-semibold bg-gradient-to-r from-zinc-700/80 to-zinc-600/80 border border-zinc-400/40 text-zinc-100">
+                                                      {rr.round_no}
+                                                    </span>
+                                                  </td>
+                                                  <td className="py-2 px-2" colSpan={7}>
+                                                    <span className="inline-block px-2 py-1 rounded text-xs font-semibold bg-gradient-to-r from-orange-900/60 to-orange-800/60 border border-orange-500/30 text-orange-100">
+                                                      Abgebrochen wegen: {formatAbortReason(abortedReason)}
+                                                    </span>
+                                                  </td>
+                                                </tr>
+                                              );
+                                            }
+                                            
+                                            // TypeScript weiß jetzt, dass rr vom Typ RoundRow ist
+                                            const round = rr as RoundRow;
+                                            
+                                            // Normale gespielte Runde
+                                            const pointsImposter = round.aborted ? 0 : (round.winner === "imposter" ? 2 : 0);
+                                            const pointsUnschuldig = round.aborted ? 0 : (round.winner === "imposter" ? 0 : 1);
+                                            
+                                            const imposterDisplay = meta?.mode === "duo" && round.imposter_team_index != null
+                                              ? `Team ${round.imposter_team_index + 1}`
+                                              : (round.imposter_name ?? "—");
+                                            
                                             return (
-                                              <tr key={`aborted-${rr.round_no}`} className="border-t border-zinc-800 opacity-60">
+                                              <tr key={round.id} className={`border-t border-zinc-800 ${round.aborted ? 'opacity-50' : ''}`}>
                                                 <td className="py-2 px-2">
                                                   <span className="inline-block px-2 py-1 rounded text-xs font-semibold bg-gradient-to-r from-zinc-700/80 to-zinc-600/80 border border-zinc-400/40 text-zinc-100">
-                                                    {rr.round_no}
+                                                    {round.round_no}{round.aborted ? ' ⚠️' : ''}
                                                   </span>
                                                 </td>
-                                                <td className="py-2 px-2" colSpan={7}>
-                                                  <span className="inline-block px-2 py-1 rounded text-xs font-semibold bg-gradient-to-r from-orange-900/60 to-orange-800/60 border border-orange-500/30 text-orange-100">
-                                                    Abgebrochen wegen: {formatAbortReason(abortedReason)}
+                                                <td className="py-2 px-2">
+                                                  <span className="inline-block px-2 py-1 rounded text-xs font-semibold bg-gradient-to-r from-red-900/60 to-red-800/60 border border-red-500/30 text-red-100">
+                                                    {imposterDisplay}
+                                                  </span>
+                                                </td>
+                                                <td className="py-2 px-2">
+                                                  <span className="inline-block px-2 py-1 rounded text-xs font-semibold bg-gradient-to-r from-zinc-700/80 to-zinc-600/80 border border-zinc-400/40 text-zinc-100">
+                                                    {round.aborted ? 'Abgebrochen' : winnerLabel(round.winner)}
+                                                  </span>
+                                                </td>
+                                                <td className="py-2 px-2">
+                                                  <span className="inline-block px-2 py-1 rounded text-xs font-semibold bg-gradient-to-r from-zinc-700/80 to-zinc-600/80 border border-zinc-400/40 text-zinc-100">
+                                                    {round.aborted ? (round.aborted_reason ?? '—') : winMethodLabel(round.win_method)}
+                                                  </span>
+                                                </td>
+                                                <td className="py-2 px-2">
+                                                  <span className="inline-block px-2 py-1 rounded text-xs font-semibold bg-gradient-to-r from-zinc-700/80 to-zinc-600/80 border border-zinc-400/40 text-zinc-100">
+                                                    {formatCategoryName(round.categoryName)}
+                                                  </span>
+                                                </td>
+                                                <td className="py-2 px-2">
+                                                  <span className="inline-block px-2 py-1 rounded text-xs font-semibold bg-gradient-to-r from-zinc-700/80 to-zinc-600/80 border border-zinc-400/40 text-zinc-100">
+                                                    {round.word ?? "—"}
+                                                  </span>
+                                                </td>
+                                                <td className="py-2 px-2">
+                                                  <span className="inline-block px-2 py-1 rounded text-xs font-semibold bg-gradient-to-r from-zinc-700/80 to-zinc-600/80 border border-zinc-400/40 text-zinc-100">
+                                                    {round.aborted ? '—' : pointsImposter}
+                                                  </span>
+                                                </td>
+                                                <td className="py-2 px-2">
+                                                  <span className="inline-block px-2 py-1 rounded text-xs font-semibold bg-gradient-to-r from-zinc-700/80 to-zinc-600/80 border border-zinc-400/40 text-zinc-100">
+                                                    {round.aborted ? '—' : pointsUnschuldig}
                                                   </span>
                                                 </td>
                                               </tr>
                                             );
-                                          }
-                                          
-                                          // TypeScript weiß jetzt, dass rr vom Typ RoundRow ist
-                                          const round = rr as RoundRow;
-                                          
-                                          // Normale gespielte Runde
-                                          const pointsImposter = round.aborted ? 0 : (round.winner === "imposter" ? 2 : 0);
-                                          const pointsUnschuldig = round.aborted ? 0 : (round.winner === "imposter" ? 0 : 1);
-                                          
-                                          const imposterDisplay = meta?.mode === "duo" && round.imposter_team_index != null
-                                            ? `Team ${round.imposter_team_index + 1}`
-                                            : (round.imposter_name ?? "—");
-                                          
-                                          return (
-                                            <tr key={round.id} className={`border-t border-zinc-800 ${round.aborted ? 'opacity-50' : ''}`}>
-                                              <td className="py-2 px-2">
-                                                <span className="inline-block px-2 py-1 rounded text-xs font-semibold bg-gradient-to-r from-zinc-700/80 to-zinc-600/80 border border-zinc-400/40 text-zinc-100">
-                                                  {round.round_no}{round.aborted ? ' ⚠️' : ''}
-                                                </span>
-                                              </td>
-                                              <td className="py-2 px-2">
-                                                <span className="inline-block px-2 py-1 rounded text-xs font-semibold bg-gradient-to-r from-red-900/60 to-red-800/60 border border-red-500/30 text-red-100">
-                                                  {imposterDisplay}
-                                                </span>
-                                              </td>
-                                              <td className="py-2 px-2">
-                                                <span className="inline-block px-2 py-1 rounded text-xs font-semibold bg-gradient-to-r from-zinc-700/80 to-zinc-600/80 border border-zinc-400/40 text-zinc-100">
-                                                  {round.aborted ? 'Abgebrochen' : winnerLabel(round.winner)}
-                                                </span>
-                                              </td>
-                                              <td className="py-2 px-2">
-                                                <span className="inline-block px-2 py-1 rounded text-xs font-semibold bg-gradient-to-r from-zinc-700/80 to-zinc-600/80 border border-zinc-400/40 text-zinc-100">
-                                                  {round.aborted ? (round.aborted_reason ?? '—') : winMethodLabel(round.win_method)}
-                                                </span>
-                                              </td>
-                                              <td className="py-2 px-2">
-                                                <span className="inline-block px-2 py-1 rounded text-xs font-semibold bg-gradient-to-r from-zinc-700/80 to-zinc-600/80 border border-zinc-400/40 text-zinc-100">
-                                                  {formatCategoryName(round.categoryName)}
-                                                </span>
-                                              </td>
-                                              <td className="py-2 px-2">
-                                                <span className="inline-block px-2 py-1 rounded text-xs font-semibold bg-gradient-to-r from-zinc-700/80 to-zinc-600/80 border border-zinc-400/40 text-zinc-100">
-                                                  {round.word ?? "—"}
-                                                </span>
-                                              </td>
-                                              <td className="py-2 px-2">
-                                                <span className="inline-block px-2 py-1 rounded text-xs font-semibold bg-gradient-to-r from-zinc-700/80 to-zinc-600/80 border border-zinc-400/40 text-zinc-100">
-                                                  {round.aborted ? '—' : pointsImposter}
-                                                </span>
-                                              </td>
-                                              <td className="py-2 px-2">
-                                                <span className="inline-block px-2 py-1 rounded text-xs font-semibold bg-gradient-to-r from-zinc-700/80 to-zinc-600/80 border border-zinc-400/40 text-zinc-100">
-                                                  {round.aborted ? '—' : pointsUnschuldig}
-                                                </span>
-                                              </td>
-                                            </tr>
-                                          );
-                                        })}
-                                      </tbody>
-                                    </table>
-                                  </div>
+                                          })}
+                                        </tbody>
+                                      </table>
+                                    </div>
+                                  </>
                                 );
                               })()}
                             </div>
@@ -1860,176 +1904,289 @@ export default function PlayerClient({ discordId }: { discordId: string }) {
                                 <div className="text-sm text-zinc-400">Keine Spielerdaten gefunden.</div>
                               ) : meta?.mode === "duo" ? (
                                 // Duo-Modus: Gruppiere nach Teams
-                                <div className="overflow-x-auto">
-                                  <table className="w-full text-sm">
-                                    <thead className="text-xs text-zinc-400">
-                                      <tr>
-                                        <th className="text-left py-2">Team</th>
-                                        <th className="text-left py-2">Spieler</th>
-                                        <th className="text-center py-2">Punkte</th>
-                                        <th className="text-center py-2">Coins</th>
-                                      </tr>
-                                    </thead>
-                                    <tbody>
-                                      {(() => {
-                                        // Gruppiere Spieler nach team_index (nicht nach Platzierung!)
-                                        const byTeam: Record<number, MatchPlayerRow[]> = {};
-                                        (playersByMatch[row.match_id] ?? []).forEach((mp) => {
-                                          const teamIdx = mp.team_index ?? 0;
-                                          if (!byTeam[teamIdx]) byTeam[teamIdx] = [];
-                                          byTeam[teamIdx].push(mp);
-                                        });
+                                <>
+                                  {/* Mobile: Card Layout */}
+                                  <div className="md:hidden space-y-3">
+                                    {(() => {
+                                      const byTeam: Record<number, MatchPlayerRow[]> = {};
+                                      (playersByMatch[row.match_id] ?? []).forEach((mp) => {
+                                        const teamIdx = mp.team_index ?? 0;
+                                        if (!byTeam[teamIdx]) byTeam[teamIdx] = [];
+                                        byTeam[teamIdx].push(mp);
+                                      });
+                                      
+                                      const sortedTeams = Object.entries(byTeam)
+                                        .map(([teamIdx, players]) => ({
+                                          teamIdx: Number(teamIdx),
+                                          players,
+                                          placement: players[0].placement,
+                                        }))
+                                        .sort((a, b) => a.placement - b.placement);
+                                      
+                                      return sortedTeams.map((team, displayIndex) => {
+                                        const teamNumber = displayIndex + 1;
+                                        const coins = team.players[0].duo_coins_delta ?? 0;
                                         
-                                        // Sortiere Teams nach Platzierung (niedrigste Platzierung zuerst)
-                                        const sortedTeams = Object.entries(byTeam)
-                                          .map(([teamIdx, players]) => ({
-                                            teamIdx: Number(teamIdx),
-                                            players,
-                                            placement: players[0].placement, // Alle Spieler im Team haben gleiche Platzierung
-                                          }))
-                                          .sort((a, b) => a.placement - b.placement);
-                                        
-                                        return sortedTeams.map((team, displayIndex) => {
-                                          const teamNumber = displayIndex + 1; // Team 1, 2, 3, 4 basierend auf Anzeigereihenfolge
-                                          console.log(`[DUO TEAM] Placement: ${team.placement}, TeamIndex: ${team.teamIdx}, DisplayNumber: ${teamNumber}`);
-                                          
-                                          return team.players.map((mp, idx) => (
-                                            <tr key={mp.discord_id} className="border-t border-zinc-800">
-                                              {idx === 0 && (
-                                                <td className="py-2" rowSpan={team.players.length}>
-                                                  <div className="flex items-center gap-2">
-                                                    {meta?.aborted_reason ? (
-                                                      <span className="inline-flex items-center justify-center rounded-md border border-zinc-700 bg-black font-semibold h-8 w-8 text-xs text-zinc-400">
-                                                        X
-                                                      </span>
-                                                    ) : (
-                                                      <PlacementPill p={team.placement} />
-                                                    )}
-                                                    <span className="text-zinc-300">Team {teamNumber}</span>
-                                                  </div>
-                                                </td>
+                                        return (
+                                          <div key={team.teamIdx} className="rounded-lg border border-zinc-700 bg-zinc-900/50 p-3">
+                                            <div className="flex items-center gap-2 mb-2">
+                                              {meta?.aborted_reason ? (
+                                                <span className="inline-flex items-center justify-center rounded-md border border-zinc-700 bg-black font-semibold h-6 w-6 text-xs text-zinc-400">
+                                                  X
+                                                </span>
+                                              ) : (
+                                                <PlacementPill p={team.placement} />
                                               )}
-                                              <td className="py-2">
-                                                <span className="inline-block px-2 py-1 rounded text-xs font-semibold bg-gradient-to-r from-zinc-700/80 to-zinc-600/80 border border-zinc-400/40">
+                                              <span className="text-xs font-semibold text-zinc-300">Team {teamNumber}</span>
+                                            </div>
+                                            <div className="space-y-1 text-xs">
+                                              {team.players.map((mp) => (
+                                                <div key={mp.discord_id} className="text-zinc-400">
                                                   <Link 
                                                     href={`/player/${encodeURIComponent(mp.discord_id)}`}
                                                     className="text-blue-400 hover:text-blue-300 hover:underline"
                                                   >
                                                     {mp.player_name}
                                                   </Link>
+                                                </div>
+                                              ))}
+                                              <div className="pt-1 border-t border-zinc-700 mt-2">
+                                                <span className="text-zinc-500">Punkte:</span> <span className="text-zinc-200">{team.players[0].total_points}</span>
+                                                <span className="ml-3 text-zinc-500">Coins:</span> 
+                                                <span className={coins > 0 ? "text-orange-300" : coins < 0 ? "text-red-300" : "text-zinc-400"}>
+                                                  {" "}{coins >= 0 ? "+" : ""}{coins}
                                                 </span>
-                                              </td>
-                                              {idx === 0 && (
-                                                <>
-                                                  <td className="py-2 text-center" rowSpan={team.players.length}>
-                                                    <span className="inline-block px-2 py-1 rounded text-xs font-semibold bg-gradient-to-r from-zinc-700/80 to-zinc-600/80 border border-zinc-400/40 text-zinc-100">
-                                                      {mp.total_points}
-                                                    </span>
+                                              </div>
+                                            </div>
+                                          </div>
+                                        );
+                                      });
+                                    })()}
+                                  </div>
+
+                                  {/* Desktop: Table Layout */}
+                                  <div className="hidden md:block overflow-x-auto">
+                                    <table className="w-full text-sm">
+                                      <thead className="text-xs text-zinc-400">
+                                        <tr>
+                                          <th className="text-left py-2">Team</th>
+                                          <th className="text-left py-2">Spieler</th>
+                                          <th className="text-center py-2">Punkte</th>
+                                          <th className="text-center py-2">Coins</th>
+                                        </tr>
+                                      </thead>
+                                      <tbody>
+                                        {(() => {
+                                          const byTeam: Record<number, MatchPlayerRow[]> = {};
+                                          (playersByMatch[row.match_id] ?? []).forEach((mp) => {
+                                            const teamIdx = mp.team_index ?? 0;
+                                            if (!byTeam[teamIdx]) byTeam[teamIdx] = [];
+                                            byTeam[teamIdx].push(mp);
+                                          });
+                                          
+                                          const sortedTeams = Object.entries(byTeam)
+                                            .map(([teamIdx, players]) => ({
+                                              teamIdx: Number(teamIdx),
+                                              players,
+                                              placement: players[0].placement,
+                                            }))
+                                            .sort((a, b) => a.placement - b.placement);
+                                          
+                                          return sortedTeams.map((team, displayIndex) => {
+                                            const teamNumber = displayIndex + 1;
+                                            
+                                            return team.players.map((mp, idx) => (
+                                              <tr key={mp.discord_id} className="border-t border-zinc-800">
+                                                {idx === 0 && (
+                                                  <td className="py-2" rowSpan={team.players.length}>
+                                                    <div className="flex items-center gap-2">
+                                                      {meta?.aborted_reason ? (
+                                                        <span className="inline-flex items-center justify-center rounded-md border border-zinc-700 bg-black font-semibold h-8 w-8 text-xs text-zinc-400">
+                                                          X
+                                                        </span>
+                                                      ) : (
+                                                        <PlacementPill p={team.placement} />
+                                                      )}
+                                                      <span className="text-zinc-300">Team {teamNumber}</span>
+                                                    </div>
                                                   </td>
-                                                  <td className="py-2 text-center" rowSpan={team.players.length}>
-                                                    {(() => {
-                                                      const coins = mp.duo_coins_delta ?? 0;
-                                                      if (coins === 0) {
+                                                )}
+                                                <td className="py-2">
+                                                  <span className="inline-block px-2 py-1 rounded text-xs font-semibold bg-gradient-to-r from-zinc-700/80 to-zinc-600/80 border border-zinc-400/40">
+                                                    <Link 
+                                                      href={`/player/${encodeURIComponent(mp.discord_id)}`}
+                                                      className="text-blue-400 hover:text-blue-300 hover:underline"
+                                                    >
+                                                      {mp.player_name}
+                                                    </Link>
+                                                  </span>
+                                                </td>
+                                                {idx === 0 && (
+                                                  <>
+                                                    <td className="py-2 text-center" rowSpan={team.players.length}>
+                                                      <span className="inline-block px-2 py-1 rounded text-xs font-semibold bg-gradient-to-r from-zinc-700/80 to-zinc-600/80 border border-zinc-400/40 text-zinc-100">
+                                                        {mp.total_points}
+                                                      </span>
+                                                    </td>
+                                                    <td className="py-2 text-center" rowSpan={team.players.length}>
+                                                      {(() => {
+                                                        const coins = mp.duo_coins_delta ?? 0;
+                                                        if (coins === 0) {
+                                                          return (
+                                                            <span className="inline-block px-2 py-1 rounded text-xs font-semibold bg-gradient-to-r from-zinc-700/80 to-zinc-600/80 border border-zinc-400/40 text-zinc-400">
+                                                              0
+                                                            </span>
+                                                          );
+                                                        }
                                                         return (
-                                                          <span className="inline-block px-2 py-1 rounded text-xs font-semibold bg-gradient-to-r from-zinc-700/80 to-zinc-600/80 border border-zinc-400/40 text-zinc-400">
-                                                            0
+                                                          <span className="inline-block px-2 py-1 rounded text-xs font-semibold bg-gradient-to-r from-orange-900/60 to-orange-800/60 border border-orange-500/30 text-orange-100">
+                                                            {coins >= 0 ? "+" : ""}{coins}
                                                           </span>
                                                         );
-                                                      }
-                                                      return (
-                                                        <span className="inline-block px-2 py-1 rounded text-xs font-semibold bg-gradient-to-r from-orange-900/60 to-orange-800/60 border border-orange-500/30 text-orange-100">
-                                                          {coins >= 0 ? "+" : ""}{coins}
-                                                        </span>
-                                                      );
-                                                    })()}
-                                                  </td>
-                                                </>
-                                              )}
-                                            </tr>
-                                          ));
-                                        });
-                                      })()}
-                                    </tbody>
-                                  </table>
-                                </div>
+                                                      })()}
+                                                    </td>
+                                                  </>
+                                                )}
+                                              </tr>
+                                            ));
+                                          });
+                                        })()}
+                                      </tbody>
+                                    </table>
+                                  </div>
+                                </>
                               ) : (
                                 // Ranked/Zwanglos: Normale Anzeige
-                                <div className="overflow-x-auto">
-                                  <table className="w-full text-sm">
-                                    <thead className="text-xs text-zinc-400">
-                                      <tr>
-                                        <th className="text-left py-2">Platz</th>
-                                        <th className="text-left py-2">Spieler</th>
-                                        <th className="text-center py-2">Punkte</th>
-                                        <th className="text-center py-2">Elo/Coins</th>
-                                      </tr>
-                                    </thead>
-                                    <tbody>
-                                      {(playersByMatch[row.match_id] ?? []).map((mp) => (
-                                        <tr key={mp.discord_id} className="border-t border-zinc-800">
-                                          <td className="py-2">
+                                <>
+                                  {/* Mobile: Card Layout */}
+                                  <div className="md:hidden space-y-2">
+                                    {(playersByMatch[row.match_id] ?? []).map((mp) => (
+                                      <div key={mp.discord_id} className="rounded-lg border border-zinc-700 bg-zinc-900/50 p-2.5">
+                                        <div className="flex items-center justify-between">
+                                          <div className="flex items-center gap-2 min-w-0 flex-1">
                                             {meta?.aborted_reason ? (
-                                              <span className="inline-flex items-center justify-center rounded-md border border-zinc-700 bg-black font-semibold h-8 w-8 text-xs text-zinc-400">
+                                              <span className="inline-flex items-center justify-center rounded-md border border-zinc-700 bg-black font-semibold h-6 w-6 text-xs text-zinc-400 flex-shrink-0">
                                                 X
                                               </span>
                                             ) : mp.placement ? (
-                                              <PlacementPill p={mp.placement} />
+                                              <div className="flex-shrink-0">
+                                                <PlacementPill p={mp.placement} />
+                                              </div>
                                             ) : (
-                                              "—"
+                                              <span className="text-xs text-zinc-400 flex-shrink-0">—</span>
                                             )}
-                                          </td>
-                                          <td className="py-2">
-                                            <span className="inline-block px-2 py-1 rounded text-xs font-semibold bg-gradient-to-r from-zinc-700/80 to-zinc-600/80 border border-zinc-400/40">
-                                              <Link 
-                                                href={`/player/${encodeURIComponent(mp.discord_id)}`}
-                                                className="text-blue-400 hover:text-blue-300 hover:underline"
-                                              >
-                                                {mp.player_name}
-                                              </Link>
-                                            </span>
-                                          </td>
-                                          <td className="py-2 text-center">
-                                            <span className="inline-block px-2 py-1 rounded text-xs font-semibold bg-gradient-to-r from-zinc-700/80 to-zinc-600/80 border border-zinc-400/40 text-zinc-100">
-                                              {mp.total_points}
-                                            </span>
-                                          </td>
-                                          <td className="py-2 text-center">
+                                            <Link 
+                                              href={`/player/${encodeURIComponent(mp.discord_id)}`}
+                                              className="text-xs text-blue-400 hover:text-blue-300 hover:underline truncate"
+                                            >
+                                              {mp.player_name}
+                                            </Link>
+                                          </div>
+                                          <div className="flex items-center gap-2 text-xs flex-shrink-0">
+                                            <span className="text-zinc-500">Pkt:</span>
+                                            <span className="text-zinc-200 font-semibold">{mp.total_points}</span>
                                             {(meta?.mode === "zwanglos") ? (
-                                              <span className="text-zinc-400">—</span>
+                                              <span className="text-zinc-500 ml-1">—</span>
                                             ) : (mp.ranked_games_played !== undefined && mp.ranked_games_played < 6) ? (
-                                              <span 
-                                                className="inline-block px-2 py-1 rounded text-xs font-semibold bg-gradient-to-r from-zinc-700/80 to-zinc-600/80 border border-zinc-400/40 text-zinc-100 cursor-help"
-                                                title="Elo nicht einsehbar weil der Spieler noch unranked ist"
-                                              >
-                                                ?
-                                              </span>
+                                              <span className="text-zinc-300 ml-1" title="Elo nicht einsehbar">?</span>
                                             ) : (
                                               (() => {
                                                 const elo = mp.elo_delta ?? 0;
-                                                if (elo === 0) {
-                                                  return (
-                                                    <span className="inline-block px-2 py-1 rounded text-xs font-semibold bg-gradient-to-r from-zinc-700/80 to-zinc-600/80 border border-zinc-400/40 text-zinc-400">
-                                                      0
-                                                    </span>
-                                                  );
-                                                }
                                                 return (
                                                   <span className={
-                                                    elo >= 0
-                                                      ? "inline-block px-2 py-1 rounded text-xs font-semibold bg-gradient-to-r from-green-900/60 to-green-800/60 border border-green-500/30 text-green-100"
-                                                      : "inline-block px-2 py-1 rounded text-xs font-semibold bg-gradient-to-r from-red-900/60 to-red-800/60 border border-red-500/30 text-red-100"
+                                                    elo > 0 ? "text-green-300 ml-1" : 
+                                                    elo < 0 ? "text-red-300 ml-1" : 
+                                                    "text-zinc-400 ml-1"
                                                   }>
                                                     {elo >= 0 ? "+" : ""}{elo}
                                                   </span>
                                                 );
                                               })()
                                             )}
-                                          </td>
+                                          </div>
+                                        </div>
+                                      </div>
+                                    ))}
+                                  </div>
+
+                                  {/* Desktop: Table Layout */}
+                                  <div className="hidden md:block overflow-x-auto">
+                                    <table className="w-full text-sm">
+                                      <thead className="text-xs text-zinc-400">
+                                        <tr>
+                                          <th className="text-left py-2">Platz</th>
+                                          <th className="text-left py-2">Spieler</th>
+                                          <th className="text-center py-2">Punkte</th>
+                                          <th className="text-center py-2">Elo/Coins</th>
                                         </tr>
-                                      ))}
-                                    </tbody>
-                                  </table>
-                                </div>
+                                      </thead>
+                                      <tbody>
+                                        {(playersByMatch[row.match_id] ?? []).map((mp) => (
+                                          <tr key={mp.discord_id} className="border-t border-zinc-800">
+                                            <td className="py-2">
+                                              {meta?.aborted_reason ? (
+                                                <span className="inline-flex items-center justify-center rounded-md border border-zinc-700 bg-black font-semibold h-8 w-8 text-xs text-zinc-400">
+                                                  X
+                                                </span>
+                                              ) : mp.placement ? (
+                                                <PlacementPill p={mp.placement} />
+                                              ) : (
+                                                "—"
+                                              )}
+                                            </td>
+                                            <td className="py-2">
+                                              <span className="inline-block px-2 py-1 rounded text-xs font-semibold bg-gradient-to-r from-zinc-700/80 to-zinc-600/80 border border-zinc-400/40">
+                                                <Link 
+                                                  href={`/player/${encodeURIComponent(mp.discord_id)}`}
+                                                  className="text-blue-400 hover:text-blue-300 hover:underline"
+                                                >
+                                                  {mp.player_name}
+                                                </Link>
+                                              </span>
+                                            </td>
+                                            <td className="py-2 text-center">
+                                              <span className="inline-block px-2 py-1 rounded text-xs font-semibold bg-gradient-to-r from-zinc-700/80 to-zinc-600/80 border border-zinc-400/40 text-zinc-100">
+                                                {mp.total_points}
+                                              </span>
+                                            </td>
+                                            <td className="py-2 text-center">
+                                              {(meta?.mode === "zwanglos") ? (
+                                                <span className="text-zinc-400">—</span>
+                                              ) : (mp.ranked_games_played !== undefined && mp.ranked_games_played < 6) ? (
+                                                <span 
+                                                  className="inline-block px-2 py-1 rounded text-xs font-semibold bg-gradient-to-r from-zinc-700/80 to-zinc-600/80 border border-zinc-400/40 text-zinc-100 cursor-help"
+                                                  title="Elo nicht einsehbar weil der Spieler noch unranked ist"
+                                                >
+                                                  ?
+                                                </span>
+                                              ) : (
+                                                (() => {
+                                                  const elo = mp.elo_delta ?? 0;
+                                                  if (elo === 0) {
+                                                    return (
+                                                      <span className="inline-block px-2 py-1 rounded text-xs font-semibold bg-gradient-to-r from-zinc-700/80 to-zinc-600/80 border border-zinc-400/40 text-zinc-400">
+                                                        0
+                                                      </span>
+                                                    );
+                                                  }
+                                                  return (
+                                                    <span className={
+                                                      elo >= 0
+                                                        ? "inline-block px-2 py-1 rounded text-xs font-semibold bg-gradient-to-r from-green-900/60 to-green-800/60 border border-green-500/30 text-green-100"
+                                                        : "inline-block px-2 py-1 rounded text-xs font-semibold bg-gradient-to-r from-red-900/60 to-red-800/60 border border-red-500/30 text-red-100"
+                                                    }>
+                                                      {elo >= 0 ? "+" : ""}{elo}
+                                                    </span>
+                                                  );
+                                                })()
+                                              )}
+                                            </td>
+                                          </tr>
+                                        ))}
+                                      </tbody>
+                                    </table>
+                                  </div>
+                                </>
                               )}
                             </div>
                           </div>
